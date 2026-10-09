@@ -1,0 +1,13 @@
+{
+  "name": "succession",
+  "displayName": "Succession",
+  "version": "0.9.0",
+  "description": "Seats a named officeholder in your project, checkpoints its work, closes its tenure with a handoff, and has a script check the evidence that handoff points at before a successor takes the seat.",
+  "author": {
+    "name": "Adam Zachariah Balkwill"
+  },
+  "homepage": "https://thecontinuitylayer.com",
+  "repository": "https://github.com/thecontinuitylayer/succession",
+  "license": "MIT",
+  "keywords": ["handoff", "continuity", "verification", "lineage", "git"]
+}

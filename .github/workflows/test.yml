@@ -1,0 +1,74 @@
+# Runs the Succession tests on Linux, macOS and Windows machines.
+# On Windows the shell is Git Bash, the same shell Claude Code uses for hooks.
+#
+# It reads the repository and writes nothing back: no token with write
+# access, nothing pushed, nothing published.
+name: test
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: test-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 40
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Environment
+        run: |
+          uname -a
+          echo "sh: $(command -v sh)"
+          (bash --version | head -1) 2>/dev/null || true
+          git --version
+          echo "core.autocrlf: $(git config --get core.autocrlf || echo unset)"
+          (awk --version 2>/dev/null | head -1) || (awk -W version 2>/dev/null | head -1) || echo "awk: version flag not supported"
+          (command -v sha256sum && echo "sha256sum present") || echo "sha256sum absent"
+          (command -v shasum && echo "shasum present") || echo "shasum absent"
+
+      # How this machine's shell and text tools treat CRLF. For reading,
+      # not a check: it cannot fail the job.
+      - name: Platform facts
+        continue-on-error: true
+        run: sh tests/platform.sh
+
+      - name: Suite
+        run: sh tests/run.sh
+
+      # The whole suite again, from a clone made with core.autocrlf=true.
+      - name: Line endings
+        if: ${{ !cancelled() }}
+        run: sh tests/autocrlf.sh
+
+      - name: Lint
+        if: ${{ !cancelled() }}
+        run: sh tests/lint.sh
+
+      # Wall time of the two hooks, with a generous ceiling per system.
+      - name: Hook timings
+        if: ${{ !cancelled() }}
+        run: |
+          case "$RUNNER_OS" in
+            Windows) limit=1500 ;;
+            *) limit=300 ;;
+          esac
+          SUCCESSION_BENCH_LIMIT_MS="$limit" sh tests/bench.sh

@@ -1,0 +1,391 @@
+
+== Three tenures ==
+      throwaway project: /tmp/succession-three-tenures.jEyGoA/project
+
+-- Tenure 001. The seat skill runs the verifier before anything else.
+
+  $ verify.sh
+      No handoff to verify: this project has no Succession history yet.
+      (exit 0)
+  ok    nothing to verify yet, exit 0
+
+  $ log-append.sh seat Sextant
+      Seated: Sextant-001 (tenure folder .succession/tenures/001-sextant).
+      Log entry: 5a9353d4c1c1d9ef0d83cc5d87067b66d392a4467153b8447d6ddef74225249e
+      Entry time (UTC): 2026-10-08T20:31:04Z
+      Owner stop phrase: Stand down, Sextant
+      (exit 0)
+  ok    Sextant-001 holds the seat
+  ok    tenure folder 001-sextant exists
+
+  $ log-append.sh checkpoint "Added the app"
+      Checkpoint logged for Sextant-001.
+      Log entry: 776e6ca640b2d826bbfd95e307455dedfe39c1df254d0c73a71fe7d6979a1608
+      Entry time (UTC): 2026-10-08T20:31:06Z
+      Cite it in checkpoints.md as: CLAIM [log:776e6ca640b2d826bbfd95e307455dedfe39c1df254d0c73a71fe7d6979a1608] <what this checkpoint records>
+      (exit 0)
+  ok    checkpoint entry hash is 64 hex digits
+
+  $ verify.sh --draft   (the close skill checks its own draft)
+      Succession verify: DRAFT of 001-sextant (nothing is recorded)
+      
+      From handoff.md (the pointer in brackets was checked; the sentence under it was not):
+        1. [pointer verified] commit:57f611e71e3a2c92615612e88502f297f1028ea6
+           Added the app with its greeting
+        2. [pointer verified] file:src/app.txt@57f611e71e3a2c92615612e88502f297f1028ea6
+           The greeting lives in src/app.txt
+        3. [pointer verified] file:src/util.txt@8db43bfa739682c0c09368195cd26d4ace0feb2b
+           The retry setting lives in src/util.txt
+        4. [pointer verified] log:776e6ca640b2d826bbfd95e307455dedfe39c1df254d0c73a71fe7d6979a1608
+           Checkpoint recorded after the app was added
+        5. [not checkable] none
+           The owner asked for three retries; ask them to confirm
+           -> no pointer given; a script cannot check this
+      
+      Log chain: intact (2 entries).
+      5 claims, 4 pointers verified, 0 failed, 1 not checkable.
+      (exit 0)
+  ok    draft verdict: 5 claims, 4 pointers verified, 0 failed, 1 not checkable
+  ok    a draft check records nothing
+
+  $ log-append.sh close "Built the app and its retry setting" "Mind the retries."
+      Tenure closed: Sextant-001. The seat is vacant.
+      Log entry: d14eecee26172c2a47371f11b8e7c5d485865c346da8f0804749ae9afb50a833
+      Entry time (UTC): 2026-10-08T20:31:10Z
+      Handoff: .succession/tenures/001-sextant/handoff.md
+      Handoff sha256, recorded in the log: 81628c8e0a6b6aa9b15d5635a17deada52d85b2f028def2b8a012ebbdef439c1
+      Git: the state files in .succession/ are not committed yet. To commit them: git add .succession; git commit -m "Succession: Sextant-001 closed" -- .succession
+      (exit 0)
+  ok    001 closed, seat vacant
+  ok    close: the entry's time is printed under its hash, and is the ts in the log
+
+-- Tenure 002. The seat cannot be claimed until the handoff has been verified.
+
+  $ log-append.sh seat Astrolabe   (too early)
+      succession: the handoff of 001-sextant has not been verified. Run verify.sh, show its output to the owner, then seat.
+      (exit 6)
+  ok    seat refused before verification (exit 6)
+
+  $ verify.sh
+      Succession verify: handoff of 001-sextant
+      
+      From handoff.md (the pointer in brackets was checked; the sentence under it was not):
+        1. [pointer verified] commit:57f611e71e3a2c92615612e88502f297f1028ea6
+           Added the app with its greeting
+        2. [pointer verified] file:src/app.txt@57f611e71e3a2c92615612e88502f297f1028ea6
+           The greeting lives in src/app.txt
+        3. [pointer verified] file:src/util.txt@8db43bfa739682c0c09368195cd26d4ace0feb2b
+           The retry setting lives in src/util.txt
+        4. [pointer verified] log:776e6ca640b2d826bbfd95e307455dedfe39c1df254d0c73a71fe7d6979a1608
+           Checkpoint recorded after the app was added
+        5. [not checkable] none
+           The owner asked for three retries; ask them to confirm
+           -> no pointer given; a script cannot check this
+      
+      Log chain: intact (3 entries).
+      Handoff: unchanged since the close (its sha256 is the one in the close entry of the log).
+      Written: .succession/tenures/001-sextant/verification.md
+      Verdict recorded. Log entry: 57680d1505eb532b2603aa074a68fe1189a01e1e2b790f6dea0f512af4d2e790
+      5 claims, 4 pointers verified, 0 failed, 1 not checkable.
+      (exit 0)
+  ok    001's handoff: 5 claims, 4 pointers verified, 0 failed, 1 not checkable
+  ok    exit 0 when nothing failed
+  ok    verification.md written next to the handoff
+  ok    verify.sh prints the hash of its log entry and no entry time
+
+  $ log-append.sh seat Astrolabe
+      Seated: Astrolabe-002 (tenure folder .succession/tenures/002-astrolabe).
+      Log entry: 35cfae749022bba70fb3a6d7cb2780bd30785dde78fd5c2cf67b2c11fde9ffe5
+      Entry time (UTC): 2026-10-08T20:31:18Z
+      Owner stop phrase: Stand down, Astrolabe
+      (exit 0)
+  ok    Astrolabe-002 holds the seat
+
+  $ log-append.sh checkpoint "Changed the greeting"
+      Checkpoint logged for Astrolabe-002.
+      Log entry: 21aba5d3cfbef349cbe836af1451dc29218838f9b5e6c4339689e0520781a80a
+      Entry time (UTC): 2026-10-08T20:31:20Z
+      Cite it in checkpoints.md as: CLAIM [log:21aba5d3cfbef349cbe836af1451dc29218838f9b5e6c4339689e0520781a80a] <what this checkpoint records>
+      (exit 0)
+
+-- Astrolabe's handoff holds two false claims: a file that never existed and a commit that never happened.
+
+  $ log-append.sh close "Changed the greeting and added config" "All done, all tested."
+      Tenure closed: Astrolabe-002. The seat is vacant.
+      Log entry: 382077d438e5ae20cdc1476ab213999bf05b88617604b36494f4f7f6c5aa0c5a
+      Entry time (UTC): 2026-10-08T20:31:24Z
+      Handoff: .succession/tenures/002-astrolabe/handoff.md
+      Handoff sha256, recorded in the log: 0bba3e3f62418ecce6629c5dcb1fa8a49f8959a2c598c93c774d8f77d632a5f9
+      Git: the state files in .succession/ are not committed yet. To commit them: git add .succession; git commit -m "Succession: Astrolabe-002 closed" -- .succession
+      (exit 0)
+  ok    002 closed, seat vacant
+
+-- Tenure 003. The successor's script checks every claim before the seat is taken.
+
+  $ verify.sh
+      Succession verify: handoff of 002-astrolabe
+      
+      From handoff.md (the pointer in brackets was checked; the sentence under it was not):
+        1. [pointer verified] commit:ea8da0b914ae46085d882fc0f0e952c9fbea847a
+           Changed the greeting and added the config file
+        2. [pointer verified, changed since] file:src/app.txt@57f611e71e3a2c92615612e88502f297f1028ea6
+           The original greeting from tenure 001
+           -> the file exists in that commit; its content at HEAD is different
+        3. [pointer verified] file:src/config.txt@ea8da0b914ae46085d882fc0f0e952c9fbea847a
+           The config file
+        4. [pointer verified] log:21aba5d3cfbef349cbe836af1451dc29218838f9b5e6c4339689e0520781a80a
+           Checkpoint recorded after the greeting changed
+        5. [FAILED] file:src/deploy.txt@ea8da0b914ae46085d882fc0f0e952c9fbea847a
+           Added the deploy script
+           -> no such file in that commit
+        6. [FAILED] commit:0123456789abcdef0123456789abcdef01234567
+           Fixed the flaky test
+           -> no such commit in this repository
+        7. [not checkable] cmd:rm -rf x
+           Cleaned the build folder
+           -> pointer type not recognised; nothing was run or opened
+        8. [not checkable] file:../outside.txt@ea8da0b914ae46085d882fc0f0e952c9fbea847a
+           Notes kept next to the repository
+           -> the path contains '..' and could leave the project; nothing was read
+        9. [not checkable] none
+           Told the owner about the staging deploy
+           -> no pointer given; a script cannot check this
+      
+      Changed since their claimed commit: 1 of the files whose pointer was verified.
+      Log chain: intact (7 entries).
+      Handoff: unchanged since the close (its sha256 is the one in the close entry of the log).
+      Written: .succession/tenures/002-astrolabe/verification.md
+      Verdict recorded. Log entry: aa7d2bd162b8498ca6154903bf863c99669aa94e8c0933943778d3622007d84a
+      9 claims, 4 pointers verified, 2 failed, 3 not checkable.
+      (exit 1)
+  ok    verdict line: 9 claims, 4 pointers verified, 2 failed, 3 not checkable
+  ok    exit is non-zero
+  ok    the false file claim is reported FAILED
+  ok    the false commit claim is reported FAILED
+  ok    a file edited after its claimed commit is 'pointer verified, changed since'
+  ok    cmd:rm -rf x is 'not checkable'
+  ok    a path with ../ is 'not checkable'
+  ok    nothing was executed: x/keep.txt is still there
+  ok    the verdict is written to verification.md
+  ok    the verdict is recorded in the log
+
+-- A failed claim does not block the owner. It is shown, and it is on the record.
+
+  $ log-append.sh seat Compass
+      Seated: Compass-003 (tenure folder .succession/tenures/003-compass).
+      Log entry: c41f303064bccf0cc13236486fc7fb08379a5869b9d764012aed0f9030582006
+      Entry time (UTC): 2026-10-08T20:31:33Z
+      Owner stop phrase: Stand down, Compass
+      (exit 0)
+  ok    Compass-003 holds the seat
+  ok    the seat entry carries the verdict it was taken under
+
+  $ log-append.sh checkpoint "Added the deploy script"
+      Checkpoint logged for Compass-003.
+      Log entry: c4b857936aa2cb8c99de44f9b383b5e2d56a1a349153851fa6936289bb9b967a
+      Entry time (UTC): 2026-10-08T20:31:35Z
+      Cite it in checkpoints.md as: CLAIM [log:c4b857936aa2cb8c99de44f9b383b5e2d56a1a349153851fa6936289bb9b967a] <what this checkpoint records>
+      (exit 0)
+
+  $ log-append.sh close "Added the missing deploy script" "Trust, then verify."
+      Tenure closed: Compass-003. The seat is vacant.
+      Log entry: 67ee0c477f7ccbff7937ea27c470122e2036bbd366a54830d17f268d742a3182
+      Entry time (UTC): 2026-10-08T20:31:37Z
+      Handoff: .succession/tenures/003-compass/handoff.md
+      Handoff sha256, recorded in the log: efc05e6be4a93ca2b78fe53a9a9a7f6fa2806b470a748c263d0896facacc9936
+      Git: the state files in .succession/ are not committed yet. To commit them: git add .succession; git commit -m "Succession: Compass-003 closed" -- .succession
+      (exit 0)
+
+  $ verify.sh   (003's own handoff, as a fourth officeholder would see it)
+      Succession verify: handoff of 003-compass
+      
+      From handoff.md (the pointer in brackets was checked; the sentence under it was not):
+        1. [pointer verified] commit:5a2a1343de5a3b1781bab7b30e0c18382c831016
+           Added the deploy script that tenure 002 said was there
+        2. [pointer verified] file:src/deploy.txt@5a2a1343de5a3b1781bab7b30e0c18382c831016
+           The deploy script
+        3. [pointer verified] log:c4b857936aa2cb8c99de44f9b383b5e2d56a1a349153851fa6936289bb9b967a
+           Checkpoint recorded after the deploy script went in
+      
+      Log chain: intact (11 entries).
+      Handoff: unchanged since the close (its sha256 is the one in the close entry of the log).
+      Written: .succession/tenures/003-compass/verification.md
+      Verdict recorded. Log entry: d71898858ccf8ebd31a72d2919db2f27014a52afe093dd218bfc865d3f327039
+      3 claims, 3 pointers verified, 0 failed, 0 not checkable.
+      (exit 0)
+  ok    003's handoff: 3 claims, 3 pointers verified, 0 failed, 0 not checkable
+  ok    exit 0
+
+-- The lineage: three officeholders, numbers 001 to 003, none reused.
+      001-sextant 002-astrolabe 003-compass 
+  ok    three tenure folders
+  ok    three seated records
+  ok    three closed records
+  ok    seat.json reads vacant
+
+-- One line of log.jsonl is edited by hand.
+      editing line 2 (entry 2): "Added the app" becomes "Added the app and all its tests"
+
+  $ verify.sh
+      Succession verify: handoff of 003-compass
+      
+      From handoff.md (the pointer in brackets was checked; the sentence under it was not):
+        1. [pointer verified] commit:5a2a1343de5a3b1781bab7b30e0c18382c831016
+           Added the deploy script that tenure 002 said was there
+        2. [pointer verified] file:src/deploy.txt@5a2a1343de5a3b1781bab7b30e0c18382c831016
+           The deploy script
+        3. [pointer verified] log:c4b857936aa2cb8c99de44f9b383b5e2d56a1a349153851fa6936289bb9b967a
+           Checkpoint recorded after the deploy script went in
+      
+      Log chain: BROKEN at entry 2 (line 2). Problems found: 1, in 12 entries.
+        - entry 2 (line 2): its content does not match its recorded hash, so this entry was edited after it was written
+      Handoff: unchanged since the close (its sha256 is the one in the close entry of the log).
+      Written: .succession/tenures/003-compass/verification.md
+      Verdict recorded. Log entry: 590c39f13f90c98610b4c8022bcef41c85a013dfac23f32745d70c3be4d39ebd
+      3 claims, 3 pointers verified, 0 failed, 0 not checkable.
+      (exit 1)
+  ok    the chain is reported BROKEN
+  ok    the broken entry is named: entry 2 (line 2)
+  ok    exit is non-zero
+
+  $ verify.sh --tenure 001-sextant   (its handoff cites the edited entry)
+      Succession verify: handoff of 001-sextant
+      
+      From handoff.md (the pointer in brackets was checked; the sentence under it was not):
+        1. [pointer verified] commit:57f611e71e3a2c92615612e88502f297f1028ea6
+           Added the app with its greeting
+        2. [pointer verified, changed since] file:src/app.txt@57f611e71e3a2c92615612e88502f297f1028ea6
+           The greeting lives in src/app.txt
+           -> the file exists in that commit; its content at HEAD is different
+        3. [pointer verified] file:src/util.txt@8db43bfa739682c0c09368195cd26d4ace0feb2b
+           The retry setting lives in src/util.txt
+        4. [FAILED] log:776e6ca640b2d826bbfd95e307455dedfe39c1df254d0c73a71fe7d6979a1608
+           Checkpoint recorded after the app was added
+           -> the entry is in log.jsonl but its content was edited after it was written
+        5. [not checkable] none
+           The owner asked for three retries; ask them to confirm
+           -> no pointer given; a script cannot check this
+      
+      Changed since their claimed commit: 1 of the files whose pointer was verified.
+      Log chain: BROKEN at entry 2 (line 2). Problems found: 1, in 13 entries.
+        - entry 2 (line 2): its content does not match its recorded hash, so this entry was edited after it was written
+      Handoff: unchanged since the close (its sha256 is the one in the close entry of the log).
+      Written: .succession/tenures/001-sextant/verification.md
+      Verdict recorded. Log entry: 18cb3f0959af22bd0ad23dec8262110c6f998cc922168f1c4ce55294f75f804f
+      5 claims, 3 pointers verified, 1 failed, 1 not checkable.
+      (exit 1)
+  ok    the log: claim on the edited entry is FAILED
+
+  $ verify.sh   (after the edit is undone)
+      Succession verify: handoff of 003-compass
+      
+      From handoff.md (the pointer in brackets was checked; the sentence under it was not):
+        1. [pointer verified] commit:5a2a1343de5a3b1781bab7b30e0c18382c831016
+           Added the deploy script that tenure 002 said was there
+        2. [pointer verified] file:src/deploy.txt@5a2a1343de5a3b1781bab7b30e0c18382c831016
+           The deploy script
+        3. [pointer verified] log:c4b857936aa2cb8c99de44f9b383b5e2d56a1a349153851fa6936289bb9b967a
+           Checkpoint recorded after the deploy script went in
+      
+      Log chain: intact (14 entries).
+      Handoff: unchanged since the close (its sha256 is the one in the close entry of the log).
+      Written: .succession/tenures/003-compass/verification.md
+      Verdict recorded. Log entry: f6af896fe9f40c8d94a141e76913897591fdf35d385d3ab2199f9d45625b2dfe
+      3 claims, 3 pointers verified, 0 failed, 0 not checkable.
+      (exit 0)
+  ok    the chain is intact again
+  ok    exit 0
+  ok    001's log: claim verifies again
+
+-- The same state, cloned with core.autocrlf=true: every text file arrives with CRLF line endings.
+  ok    the carriage-return count works on this machine (2 in a CRLF sample, 0 in an LF sample)
+  ok    a file rewritten with CRLF is byte-for-byte the CRLF sample
+      .succession/log.jsonl: 16 lines, 16 carriage returns
+  ok    the clone's log.jsonl has CRLF on every line
+      .succession/lineage.jsonl: 6 lines, 6 carriage returns
+  ok    the clone's lineage.jsonl has CRLF on every line
+      .succession/seat.json: 8 lines, 8 carriage returns
+  ok    the clone's seat.json has CRLF on every line
+      .succession/tenures/002-astrolabe/handoff.md: 21 lines, 21 carriage returns
+  ok    the clone's handoff (002) has CRLF on every line
+      .succession/tenures/003-compass/verification.md: 38 lines, 38 carriage returns
+  ok    the clone's verification.md (003) has CRLF on every line
+  ok    the same files in the LF project hold no carriage return
+  ok    session-start reads the CRLF seat.json
+  ok    session-start reads the verdict from the CRLF log.jsonl
+  ok    session-start counts the CRLF lineage
+
+  $ verify.sh --tenure 002-astrolabe   (in the CRLF clone)
+      Succession verify: handoff of 002-astrolabe
+      
+      From handoff.md (the pointer in brackets was checked; the sentence under it was not):
+        1. [pointer verified] commit:ea8da0b914ae46085d882fc0f0e952c9fbea847a
+           Changed the greeting and added the config file
+        2. [pointer verified, changed since] file:src/app.txt@57f611e71e3a2c92615612e88502f297f1028ea6
+           The original greeting from tenure 001
+           -> the file exists in that commit; its content at HEAD is different
+        3. [pointer verified] file:src/config.txt@ea8da0b914ae46085d882fc0f0e952c9fbea847a
+           The config file
+        4. [pointer verified] log:21aba5d3cfbef349cbe836af1451dc29218838f9b5e6c4339689e0520781a80a
+           Checkpoint recorded after the greeting changed
+        5. [FAILED] file:src/deploy.txt@ea8da0b914ae46085d882fc0f0e952c9fbea847a
+           Added the deploy script
+           -> no such file in that commit
+        6. [FAILED] commit:0123456789abcdef0123456789abcdef01234567
+           Fixed the flaky test
+           -> no such commit in this repository
+        7. [not checkable] cmd:rm -rf x
+           Cleaned the build folder
+           -> pointer type not recognised; nothing was run or opened
+        8. [not checkable] file:../outside.txt@ea8da0b914ae46085d882fc0f0e952c9fbea847a
+           Notes kept next to the repository
+           -> the path contains '..' and could leave the project; nothing was read
+        9. [not checkable] none
+           Told the owner about the staging deploy
+           -> no pointer given; a script cannot check this
+      
+      Changed since their claimed commit: 1 of the files whose pointer was verified.
+      Log chain: intact (16 entries).
+      Handoff: unchanged since the close (its sha256 is the one in the close entry of the log).
+      Written: .succession/tenures/002-astrolabe/verification.md
+      Verdict recorded. Log entry: 8cf6ea83d5886ae0efac8ac0ced90a11c3ecf6ffcf9ee62fc3b1a799e3467bf3
+      9 claims, 4 pointers verified, 2 failed, 3 not checkable.
+      (exit 1)
+  ok    same verdict line as in the LF project
+  ok    same exit code as in the LF project
+  ok    the chain is intact with CRLF line endings
+  ok    'changed since' is unaffected by line endings
+
+  $ verify.sh   (in the CRLF clone)
+      Succession verify: handoff of 003-compass
+      
+      From handoff.md (the pointer in brackets was checked; the sentence under it was not):
+        1. [pointer verified] commit:5a2a1343de5a3b1781bab7b30e0c18382c831016
+           Added the deploy script that tenure 002 said was there
+        2. [pointer verified] file:src/deploy.txt@5a2a1343de5a3b1781bab7b30e0c18382c831016
+           The deploy script
+        3. [pointer verified] log:c4b857936aa2cb8c99de44f9b383b5e2d56a1a349153851fa6936289bb9b967a
+           Checkpoint recorded after the deploy script went in
+      
+      Log chain: intact (17 entries).
+      Handoff: unchanged since the close (its sha256 is the one in the close entry of the log).
+      Written: .succession/tenures/003-compass/verification.md
+      Verdict recorded. Log entry: a4801f68ff0f1764c18db8ecc156a457b436f33833ce6e216b2fbe2bd5cabce5
+      3 claims, 3 pointers verified, 0 failed, 0 not checkable.
+      (exit 0)
+  ok    003's handoff verifies in the CRLF clone
+
+  $ log-append.sh seat Quadrant   (in the CRLF clone)
+      Seated: Quadrant-004 (tenure folder .succession/tenures/004-quadrant).
+      Log entry: 13df9e3264779d53dbb130ab17004b9c8f7968246ffd670606ea24f31c3c0e3a
+      Entry time (UTC): 2026-10-08T20:31:58Z
+      Owner stop phrase: Stand down, Quadrant
+      (exit 0)
+  ok    the next number is 004: CRLF state files are read correctly
+      log.jsonl: 16 lines end with CRLF, 4 with LF
+  ok    log.jsonl now mixes CRLF entries with new LF entries
+  ok    the chain stays intact when LF entries follow CRLF entries
+  ok    the stop phrase is recognised with a CRLF seat.json
+  ok    and the chain is still intact after the stand-down
+
+61 passed, 0 failed

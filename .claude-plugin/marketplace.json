@@ -1,0 +1,14 @@
+{
+  "name": "succession-marketplace",
+  "description": "Home marketplace of the Succession plugin.",
+  "owner": {
+    "name": "Adam Zachariah Balkwill"
+  },
+  "plugins": [
+    {
+      "name": "succession",
+      "source": "./",
+      "description": "Named officeholders, handoffs whose evidence pointers a script checks against git, a hash-chained log and an owner stop phrase for Claude Code."
+    }
+  ]
+}
