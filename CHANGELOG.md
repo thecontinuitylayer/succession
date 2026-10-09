@@ -1,5 +1,42 @@
 # Changelog
 
+## 0.9.1
+
+A session that ends without a close, or whose context is compacted,
+comes back knowing its name and its last checkpoint. Nothing else is
+new.
+
+- **Session start, with the seat held.** The hook's text now also gives
+  the tenure's last checkpoint as the log has it (at most 200
+  characters), tells the model that it is the seated officeholder, has
+  it read the charter and the latest checkpoint note, and has it open
+  its next reply with its name and what that checkpoint recorded. After
+  a compaction it says that the note and the log are the record to
+  trust over memory. With the seat vacant, an officeholder stood down,
+  or a warning to give, the text is as it was.
+- **Session title.** A second session-start hook gives Claude Code the
+  officeholder's name and number as the session's title, for a new
+  session, a resumed one and a fork. A session that already has a title
+  keeps it. The title is a JSON document of its own; the status stays
+  plain text.
+- **Before a compaction.** A new hook adds one entry to the log, manual
+  or automatic. The entry has the type `checkpoint` and a fixed text, so
+  a log that holds it reads the same to the verifier of 0.9.0. The hook
+  prints nothing, always exits 0 and waits three seconds at most for the
+  lock; it cannot hold a compaction up.
+- **Install on Windows.** The README says what to do when
+  `claude plugin marketplace add` fails with `EBUSY` and `EPERM` while
+  VS Code is open on a folder that holds your `.claude` folder.
+- **Run for real since 0.9.0:** 0.9.0 installed from the public
+  repository with the two shell commands, in a terminal session on
+  Windows; and this version's new behaviour in headless sessions on
+  Linux, a real `/compact` included. The README lists what is still
+  not tested: an automatic compaction, an interactive session with this
+  version, macOS, and the one-line install.
+
+The entry format, the claim format, the stop phrase and the verdict are
+unchanged, and so is the meaning of every entry type.
+
 ## 0.9.0
 
 The public starting point. Before it, the plugin was built and tested in

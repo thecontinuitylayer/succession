@@ -1,0 +1,52 @@
+Succession: an officeholder comes back by name
+
+$ claude
+> /succession:seat Sextant
+  I'm seated as Sextant-001. The script gave no WARNING: line. [...]
+> /succession:checkpoint a.txt and b.txt are committed
+  Sextant-001: checkpoint recorded at 2026-10-09T04:08:00Z in
+  .succession/tenures/001-sextant/checkpoints.md. [...]
+(the session ends here: no close, no handoff)
+
+$ claude
+(a new session; Claude Code reports its title as Sextant-001)
+> Where were we?
+  I'm Sextant-001. My last checkpoint says a.txt and b.txt are committed. [...]
+> /compact
+> Carry on.
+  I'm Sextant-001. My last checkpoint recorded that a.txt and b.txt are committed.
+
+  I re-read the charter and the checkpoint after the compaction. [...]
+(later the tenure is closed; two claims in its handoff are false on purpose)
+
+$ claude
+(a new session: the successor)
+> /succession:seat
+  Here is the verifier's complete output:
+
+  Succession verify: handoff of 001-sextant
+
+  From handoff.md (the pointer in brackets was checked; the sentence under it was not):
+    1. [pointer verified] commit:b05ac7a
+       Added a.txt
+    2. [pointer verified] file:b.txt@c880940
+       b.txt is in the repository
+    3. [pointer verified] log:8fef25cf3d21
+       Checkpoint recorded after both files were committed
+    4. [FAILED] file:deploy.sh@c880940
+       Added the deploy script
+       -> no such file in that commit
+    5. [FAILED] commit:0123456789abcdef0123456789abcdef01234567
+       Fixed the flaky test
+       -> no such commit in this repository
+    6. [not checkable] none
+       Told the owner about the staging deploy
+       -> no pointer given; a script cannot check this
+
+  Log chain: intact (4 entries).
+  Handoff: unchanged since the close (its sha256 is the one in the close entry of the log).
+  [...]
+  6 claims, 3 pointers verified, 2 failed, 1 not checkable.
+  [...]
+  Do you want to go on with the two failed claims on record? If so, I'll serve as
+  Astrolabe-002. To confirm, send /succession:seat Astrolabe.

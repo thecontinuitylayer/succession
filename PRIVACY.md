@@ -24,7 +24,8 @@ what it writes and what it leaves alone.
   can end by telling you whether its files are committed. Nothing is
   staged or committed by the plugin.
 - **Whether a `.git` entry exists in the project folder and the folders
-  above it, and your repository's `.git/config`.** The two hooks find the
+  above it, and your repository's `.git/config`.** The session-start and
+  prompt hooks find the
   repository root this way without starting git. The config is read for
   one thing: whether it names a work tree somewhere else. Nothing from it
   is stored or printed.
@@ -35,7 +36,11 @@ what it writes and what it leaves alone.
   to disk, log it or pass it on. That JSON also carries the path of the
   session transcript; the script never opens it.
 
-The session-start hook does not read its input at all.
+The session-start hook does not read its input at all when it prints the
+status. Run a second time for the session's title, it looks through that
+input for one thing: whether the session already has a title, in which
+case it leaves the title alone. The hook that runs before a compaction
+does not read its input. None of the three opens the transcript.
 
 ## What it writes
 
@@ -43,7 +48,8 @@ Under `.succession/` in your project:
 
 - `seat.json`, `lineage.jsonl` and `log.jsonl`: who held the seat and when,
   to the second; checkpoint summaries, verification verdicts, stand-downs,
-  and each tenure's one-line summary and last words. The summaries and
+  the time of each compaction of a session's context while the seat was
+  held, and each tenure's one-line summary and last words. The summaries and
   last words are written by the model and passed to the script.
 - `tenures/<NNN-codename>/verification.md`: the verifier's verdict.
 - `tenures/<NNN-codename>/stood-down`: one line, left by a stand-down.
@@ -78,7 +84,11 @@ Nothing, through this plugin. Two things are worth knowing all the same:
 - If you commit `.succession/` to git and push it, its contents go wherever
   your repository goes.
 - The model reads these files as part of your Claude Code session, the same
-  as any other file in your project. How Anthropic handles session data is
+  as any other file in your project. At a session start the plugin itself
+  hands Claude Code a few lines from them: the seat status, the
+  officeholder's name (also as the session's title, which Claude Code
+  keeps with the session) and the one-line summary of the last
+  checkpoint. How Anthropic handles session data is
   covered by Anthropic's own terms and privacy policy, not by this plugin.
 
 ## Removing it

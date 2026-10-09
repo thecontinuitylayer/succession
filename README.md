@@ -7,6 +7,13 @@ git project. A named officeholder takes the seat, checkpoints its work and
 closes with a handoff. Its successor's script checks the evidence that
 handoff points at and shows you a counted verdict before the seat is taken.
 
+![Terminal recording: an officeholder takes its name, its session ends without a close, a new session answers by name with its last checkpoint, and a successor's check counts two false claims in a handoff](tests/recording/come-back.svg)
+
+Half a minute, replayed from six real sessions. The replies are the
+sessions' own words, cut where marked; the time the model took is left
+out. [`tests/recording/`](tests/recording/) has the same as a cast, as
+plain text, and the script that replays it.
+
 What the script checks is pointers. A claim in a handoff names a commit, a
 file in a commit or a log entry, and "pointer verified" means that thing
 exists. It does not mean the sentence beside the pointer is true: no
@@ -46,6 +53,23 @@ installed with the two shell commands is available there too. To remove
 it: `claude plugin uninstall succession@succession-marketplace`, and
 delete the `.succession/` folder of a project to remove its record.
 
+**If the install fails on Windows** with `EBUSY: resource busy or
+locked, rename '...\marketplaces\<name>..clone' -> ...`, followed by
+`EPERM`: this was seen once, on the owner's machine, with VS Code open
+on a folder that contained his `.claude` folder (he had `C:\Users`
+open). VS Code's git watcher takes hold of a repository cloned inside
+the folder it has open about two seconds after the clone, and Claude
+Code's rename of the fresh clone then fails. Outside the open folder the
+same command worked. What to do:
+
+- Close VS Code, or open a project folder in it and not your home
+  folder, then run `claude plugin marketplace add` again.
+- After removing the plugin or its marketplace, restart Claude Code
+  before you add it again. Removing and adding in the same Claude Code
+  session failed the same way.
+- If a folder whose name ends in `..clone` is left in
+  `.claude\plugins\marketplaces` under your home folder, delete it.
+
 ## Start
 
 Open a git project in Claude Code and type:
@@ -70,6 +94,17 @@ no network call.
 | `/succession:lineage` | Every officeholder so far: name, number, dates, what it did, its last words. |
 | `Stand down, Astrolabe` | Sent as a whole message, this records a stand-down and tells the officeholder to stop. The record is in the log before the model sees anything. The officeholder is told to start nothing more; you send `/succession:close` when you want the handoff written. |
 
+An officeholder also comes back by name. When a session ends without a
+close, or its context is compacted, the seat is still held. The next
+session start tells the model that it is, say, `Sextant-001`, shows it
+what its last checkpoint recorded and has it read its charter and its
+checkpoint note, and its next reply opens with a line such as "I'm
+Sextant-001. My last checkpoint says a.txt and b.txt are committed."
+Claude Code is given the name as the session's title. Before a
+compaction the plugin adds a line to the log, so the record shows when
+memory was cut. [Coming back by name](#coming-back-by-name) has the
+details and the limits.
+
 It is for people who run long or repeated agent work in a git repository
 and are tired of starting over, or of trusting a summary they cannot check.
 
@@ -92,7 +127,11 @@ Read this before you rely on it.
 - **Its files say a lot about how you work.** Read
   [In a client's repository, or on a team](#in-a-clients-repository-or-on-a-team)
   before you commit `.succession/` to a repository that is not yours alone.
-- **It has been run for real on Linux (headless) and once on Windows.**
+- **Coming back by name is an instruction too.** The session start
+  hands the model its name and its last checkpoint. A model can ignore
+  that, and what it then says about the work is still the model
+  speaking: the checkpoint note and the log are the record.
+- **It has been run for real on Linux (headless) and twice on Windows.**
   [Not tested yet](#not-tested-yet) has the list.
 
 ## A five-minute tour
@@ -220,8 +259,8 @@ their history.
 
 What the files reveal to anyone who can read the repository:
 
-- The time, to the second, of every seating, checkpoint, stand-down and
-  close: when you worked, and for how long.
+- The time, to the second, of every seating, checkpoint, stand-down,
+  close and compaction: when you worked, and for how long.
 - That named AI agents did the work, and how many.
 - The charter: what the agent was allowed to do without asking.
 - Notes written by a model: handoffs, lessons and checkpoint notes, with
@@ -392,6 +431,62 @@ directly (a `systemMessage`), in case the model does not pass it on. A
 lock left by a process that was killed is cleared after two seconds, so
 the stand-down behind it is still recorded.
 
+## Coming back by name
+
+A tenure usually outlives a session. The terminal is closed, the
+machine sleeps, or the context fills up and Claude Code compacts it.
+None of that vacates the seat: it is held until a close.
+
+**At a session start with the seat held**, the session-start hook adds
+three things to what it has always printed:
+
+- the tenure's last checkpoint as the log has it: the entry's number,
+  its time and its one-line summary, cut at 200 characters, or the fact
+  that none is recorded yet;
+- two or three sentences to the model: that it is `Sextant-001`, the
+  officeholder seated here; to read the charter and the latest
+  checkpoint note before it continues; and to open its next reply with
+  one short line that gives its name and what that checkpoint recorded;
+- the session's title, `Sextant-001`, through a second hook that prints
+  one small JSON document. Claude Code takes a title from a hook at a
+  new session, a resumed one and a fork, and the plugin leaves a session
+  alone that already has a title of its own (one you gave with `--name`
+  or `/rename`, or an earlier one from the plugin).
+
+**After a compaction** the same text says that the context was just
+compacted and that the checkpoint note and `.succession/log.jsonl` are
+the record to trust over memory.
+
+**Before a compaction**, manual (`/compact`) or automatic, a third hook
+adds one entry to the log, and to nothing else: `Context compacted
+(manual).` or `Context compacted (auto).`, with a sentence saying that
+the plugin wrote it. It has the type `checkpoint`, so that the log reads
+the same to an older copy of the verifier, and the session start does
+not count it as the officeholder's checkpoint. The hook cannot hold a
+compaction up: it prints nothing, always exits 0, and gives up after
+three seconds if another write holds the lock, with one line on
+standard error.
+
+None of this is added when the seat is vacant, when the officeholder
+was stood down, or when the session start has a `WARNING:` to give.
+Then the text is what it was before.
+
+The limits:
+
+- The checkpoint summary is text a model wrote, passed on from the log
+  without the chain being checked at that moment (`verify.sh` checks
+  it). It is one line of at most 200 characters, and an entry that could
+  not have come from the plugin's script (too long, or holding a control
+  character) is not shown.
+- What the officeholder knows after a session ended is what it wrote
+  down. Work since the last checkpoint is in git and in the files, not
+  in the record. Take a checkpoint before you stop for the day.
+- A session resumed with a title from an earlier officeholder keeps that
+  title.
+- In sessions run for this version, the model twice went on to check its
+  checkpoint's claims with `git ls-tree`, unprompted, after reading the
+  note. Claude Code asks about that command under default permissions.
+
 ## Files it keeps
 
 ```
@@ -426,19 +521,22 @@ Whether these files belong in your git history is answered under
 
 ## What runs on your machine
 
-Four POSIX shell scripts, and nothing else. No `jq`, `node` or `python`.
+Five POSIX shell scripts, and nothing else. No `jq`, `node` or `python`.
 
 | Script | When | What it does |
 | --- | --- | --- |
-| `scripts/session-start.sh` | Session start, resume, clear, compact, fork (a hook) | Prints up to 2,000 characters: seat status, charter path, latest handoff path and the verdict in the log's last verify entry for it, and a warning when the state files look older than the tenure folders. Prints nothing in a project without `.succession/`. Writes nothing. |
+| `scripts/session-start.sh` | Session start, resume, clear, compact, fork (a hook) | Prints up to 2,000 characters: seat status, charter path, latest handoff path and the verdict in the log's last verify entry for it, and a warning when the state files look older than the tenure folders. With the seat held and no warning: the last checkpoint in the log and who the session is (see [Coming back by name](#coming-back-by-name)). Prints nothing in a project without `.succession/`. Writes nothing. |
+| `scripts/session-start.sh title` | New session, resume, fork (a second hook) | With the seat held and no warning, prints one JSON document that gives Claude Code the officeholder's name as the session's title. Otherwise prints nothing. Its input is read for one thing: whether the session already has a title. |
+| `scripts/compact-mark.sh` | Before a compaction (a hook) | With the seat held, has `log-append.sh` add one entry to the log. Prints nothing, always exits 0. |
 | `scripts/stand-down.sh` | Every submitted prompt (a hook) | Compares the prompt with the stop phrase. On a match, calls `log-append.sh`. The prompt is examined in memory and is never stored. |
 | `scripts/verify.sh` | When the seat, checkpoint or close skill calls it | Checks pointers and the log chain with `git cat-file`, `git rev-parse` and `git merge-base`, and the handoff against the sha256 in its close entry; writes `verification.md`. |
 | `scripts/log-append.sh` | When a skill, the hook or `verify.sh` calls it | The single writer of `log.jsonl`, `seat.json` and `lineage.jsonl`. Writes the charter from the template when the project has none. At a close it also asks `git status` and `git check-ignore` about `.succession/`, to print the last line of the close. It stages and commits nothing. |
 
-The two hooks are kept cheap, because one of them runs on every prompt
-and starting a process is slow on Windows. In a project without
-`.succession/`, neither hook starts another process: they look for the
-folder with shell builtins. The prompt hook also starts none while nobody
+The session-start and prompt hooks are kept cheap, because one of them
+runs on every prompt and starting a process is slow on Windows. In a
+project without `.succession/`, neither starts another process: they
+look for the folder with shell builtins. (The hook before a compaction
+runs seldom and asks `git` each time.) The prompt hook also starts none while nobody
 holds the seat, and one `awk` process while somebody does. (Where the
 repository root cannot be found by looking at folders, for instance when
 `GIT_DIR` is set, the hooks ask `git`, as they always do before anything
@@ -574,7 +672,8 @@ What Succession adds to that picture:
 - A verifier that **never executes handoff content**.
 
 What it does not do that others do: run tests or per-claim commands, write
-a handoff automatically at compaction, or work outside a git repository.
+a handoff automatically at compaction (it notes the compaction in the
+log and nothing more), or work outside a git repository.
 
 ## Requirements and limits
 
@@ -586,7 +685,7 @@ a handoff automatically at compaction, or work outside a git repository.
   workflow (`.github/workflows/test.yml`) runs the test suite on every
   push, on three hosted machines. That is the scripts run by a shell.
   Claude Code itself has run the plugin on Linux (headless sessions) and
-  once on Windows (interactive), and never on macOS; see
+  twice on Windows, and never on macOS; see
   [Not tested yet](#not-tested-yet).
 
   | Machine | Shell that runs the scripts | awk |
@@ -635,6 +734,15 @@ What has been run for real, by Claude Code itself:
   most of them nothing was refused; in one, a git command the model
   chose by itself during a checkpoint was (see "Where you are still
   asked").
+- Headless sessions on Linux with Claude Code 2.1.295, for
+  [Coming back by name](#coming-back-by-name): a seat, a checkpoint and
+  no close in one conversation; a new conversation, whose reply to
+  "Where were we?" began "I'm Sextant-001. My last checkpoint says a.txt
+  and b.txt are committed."; then `/compact` in that conversation, which
+  left its entry in the log, and a reply to "Carry on." that began with
+  the name and the checkpoint again. Claude Code reported the session
+  title as `Sextant-001` and wrote it into the session's transcript. The
+  tour was run again with this version.
 - One interactive session on Windows, in the Claude Code panel of VS
   Code, run by the plugin's owner: Claude Code 2.1.294, Git for Windows
   2.55.0, and an earlier build of the plugin (0.1.3), installed with the
@@ -642,6 +750,9 @@ What has been run for real, by Claude Code itself:
   `/succession:seat <Codename>`, a checkpoint, the stop phrase and the
   close worked from start to finish, and the hook had the stand-down in
   the log before the close.
+- A session in a plain terminal on Windows, run by the plugin's owner:
+  Claude Code 2.1.294, in its auto permission mode, with version 0.9.0
+  installed from the public repository with the two shell commands.
 
 What has not:
 
@@ -651,21 +762,34 @@ What has not:
 - An interactive session in a terminal, on macOS or on Linux. Every real
   session on Linux was headless, where a question cannot be answered and
   counts as a refusal.
+- Coming back by name, anywhere but in headless sessions on Linux with
+  Claude Code 2.1.295: not in an interactive session, not on Windows or
+  macOS, and not with the plugin installed from a marketplace (the
+  sessions loaded it with `--plugin-dir`). Where the session title shows
+  in Claude Code's own screens was not looked at; headless, Claude Code
+  reported it and stored it.
+- An automatic compaction. The manual one (`/compact`) was run for real;
+  for the automatic one the hook was given the word `auto` by the tests,
+  as Claude Code's matcher would give it.
+- A Claude Code that does not take a session title from a session-start
+  hook. The title has a hook of its own so that the status text does
+  not depend on it, but no such version was run.
 - In an interactive session: seating a successor over a real handoff, and
   the lineage skill. The Windows session did not get that far.
 - The four closing lines of a close, in an interactive session. They are
   newer than the Windows session and were seen in headless sessions on
   Linux.
 - The approvals in [Permission prompts](#permission-prompts), anywhere
-  but in headless sessions on Linux. The Windows session was not used to
-  check them. What the question looks like, what "don't ask again" then
+  but in headless sessions on Linux. The Windows sessions were not used
+  to check them (the second ran in auto mode, where Claude Code decides
+  without asking). What the question looks like, what "don't ask again" then
   saves, and whether the approvals apply after you answer yes to a skill
   the model started, were not seen. An approval for a script matches the
   command text, which holds the path of the plugin folder, and how that
   path is spelled in a Windows session was not checked.
 - The one-line install, `/plugin install succession --marketplace ...`.
   It is taken from Claude Code's documentation and was not run. The two
-  shell commands were.
+  shell commands were, on Windows, from the public repository.
 - The warning Claude Code is given to show you when a stand-down cannot
   be recorded, in an interactive session. In a headless session on Linux
   it arrived as a notice that begins "UserPromptSubmit says:", and the
@@ -676,13 +800,13 @@ What has not:
 - The command line at the end of a close, in PowerShell and in `cmd.exe`.
   The tests run it in `sh` on all three systems, which on Windows is Git
   Bash.
-- Claude Code versions other than 2.1.294, and organizations whose
+- Claude Code versions other than 2.1.294 and 2.1.295, and organizations whose
   managed settings switch off approvals carried by skills.
 
 ## Tests
 
 ```
-sh tests/run.sh        # three tenures, the stop phrase, hostile claims, session start, the log, the close, safety
+sh tests/run.sh        # three tenures, the stop phrase, hostile claims, session start, compaction, the log, the close, safety
 sh tests/autocrlf.sh   # the whole suite again in a core.autocrlf=true clone
 sh tests/lint.sh       # shellcheck, POSIX syntax, the approvals list, copies of shared text, one version
 sh tests/bench.sh      # wall time of the two hooks
@@ -705,9 +829,13 @@ three-tenure run again, slowly enough to read:
 SUCCESSION_DEMO=1 SUCCESSION_DEMO_PAUSE=3 asciinema rec --command "sh tests/three-tenures.sh" demo.cast
 ```
 
+The recording at the top of this page is of another kind: it runs
+nothing. `tests/recording/come-back.sh` prints what was typed and
+answered in six real sessions, and says so in its opening lines.
+
 ## Version and license
 
-Version 0.9.0. It becomes 1.0.0 once a real session on macOS, an
+Version 0.9.1. It becomes 1.0.0 once a real session on macOS, an
 interactive session in a terminal and the one-line install have been
 run. Changes are in [CHANGELOG.md](CHANGELOG.md). To report a security
 problem, see [SECURITY.md](SECURITY.md). MIT; see [LICENSE](LICENSE).

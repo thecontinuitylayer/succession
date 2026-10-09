@@ -1,7 +1,7 @@
 {
   "name": "succession",
   "displayName": "Succession",
-  "version": "0.9.0",
+  "version": "0.9.1",
   "description": "Seats a named officeholder in your project, checkpoints its work, closes its tenure with a handoff, and has a script check the evidence that handoff points at before a successor takes the seat.",
   "author": {
     "name": "Adam Zachariah Balkwill"

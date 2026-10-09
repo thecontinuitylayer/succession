@@ -23,8 +23,8 @@ status=0
 printf '== shellcheck ==\n'
 if command -v shellcheck > /dev/null 2>&1; then
   shellcheck --version | sed -n '2p'
-  if shellcheck -s sh -x scripts/*.sh tests/*.sh tests/live/*.sh; then
-    printf 'shellcheck: clean (no warnings) on %s files\n' "$(printf '%s\n' scripts/*.sh tests/*.sh tests/live/*.sh | grep -c '')"
+  if shellcheck -s sh -x scripts/*.sh tests/*.sh tests/live/*.sh tests/recording/*.sh; then
+    printf 'shellcheck: clean (no warnings) on %s files\n' "$(printf '%s\n' scripts/*.sh tests/*.sh tests/live/*.sh tests/recording/*.sh | grep -c '')"
   else
     status=1
   fi
@@ -36,7 +36,7 @@ printf '\n== syntax check under each shell found ==\n'
 for shell in sh dash bash ksh mksh yash busybox; do
   command -v "$shell" > /dev/null 2>&1 || continue
   bad=
-  for f in scripts/*.sh tests/*.sh tests/live/*.sh; do
+  for f in scripts/*.sh tests/*.sh tests/live/*.sh tests/recording/*.sh; do
     if [ "$shell" = busybox ]; then
       busybox sh -n "$f" 2> /dev/null || bad="$bad $f"
     else

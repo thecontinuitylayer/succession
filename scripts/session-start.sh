@@ -2,6 +2,13 @@
 # session-start.sh - SessionStart hook (startup, resume, clear, compact,
 # fork).
 #
+#   session-start.sh            the status text, on standard output
+#   session-start.sh compact    the same, for a session whose context was
+#                               just compacted (hooks.json passes the word
+#                               on the "compact" matcher)
+#   session-start.sh title      the session title and nothing else, as a
+#                               JSON document (startup, resume and fork)
+#
 # Prints at most 2,000 characters of plain text, which Claude Code adds
 # to the session's context: who holds the seat, where the charter is,
 # where the latest handoff is and what the log's last verify entry says
@@ -10,12 +17,28 @@
 # folders show more than the state files do, which is what is left when
 # git puts older state files back (git stash, git checkout, git reset).
 #
+# When the seat is occupied and nothing is in doubt (no warning), the
+# text also says what the log's last checkpoint entry for the tenure
+# recorded, in at most 200 characters, tells the officeholder who it is,
+# and has it read the charter and the latest checkpoint note and open
+# its first reply with its name and that checkpoint. After a compaction
+# it says that the note and the log are the record to trust over memory.
+#
+# "title" prints {"hookSpecificOutput":{"hookEventName":"SessionStart",
+# "sessionTitle":"<Codename>-<NNN>"}} in that same state and nothing in
+# any other. The name is letters, digits and hyphens, so nothing in the
+# document needs escaping. It leaves a session alone that already has a
+# title of its own: that is the one thing its standard input is read
+# for (the field "session_title"). The title is a separate hook, and the
+# status stays plain text, so that the status still arrives where Claude
+# Code does not take the title.
+#
 # It prints nothing at all in a project that has no .succession folder,
 # and in that case it starts no other process: the folder is looked for
-# with shell builtins. It does not read its standard input or the
-# conversation transcript. It reads the files under <repo>/.succession
-# and, to find that folder, the repository's .git/config. It writes
-# nothing.
+# with shell builtins. Without "title" it does not read its standard
+# input. It never reads the conversation transcript. It reads the files
+# under <repo>/.succession and, to find that folder, the repository's
+# .git/config. It writes nothing.
 #
 # POSIX sh. No network. Always exits 0.
 
@@ -25,6 +48,15 @@ export LC_ALL
 NL='
 '
 MAX=2000
+CP_MAX=200
+MARK_MANUAL='Context compacted (manual). Written by the plugin before Claude Code compacted the context, not by the officeholder.'
+MARK_AUTO='Context compacted (auto). Written by the plugin before Claude Code compacted the context, not by the officeholder.'
+
+mode=${1-}
+case $mode in
+  compact | title) ;;
+  *) mode= ;;
+esac
 
 is_tenure_name() {
   case $1 in
@@ -229,6 +261,14 @@ entry=
 ls_type=
 ls_tenure=
 want="\"type\":\"verify\",\"tenure\":\"$best\",\"data\":\""
+# A third thing when the seat reads occupied: the tenure's last checkpoint
+# entry. The entries the compaction hook writes have the same type and
+# are passed over: they are the plugin's, not the officeholder's.
+cp_entry=
+want_cp=
+if [ "$seat_state" -eq 0 ] && [ "$SEAT_STATUS" = occupied ]; then
+  want_cp="\"type\":\"checkpoint\",\"tenure\":\"$SEAT_TENURE\",\"data\":\""
+fi
 if [ -f "$S/log.jsonl" ] && [ ! -L "$S/log.jsonl" ]; then
   while IFS= read -r lline || [ -n "$lline" ]; do
     case $lline in
@@ -236,6 +276,15 @@ if [ -f "$S/log.jsonl" ] && [ ! -L "$S/log.jsonl" ]; then
         if [ -n "$best" ]; then
           case $lline in
             *"$want"*) entry=$lline ;;
+          esac
+        fi
+        continue
+        ;;
+      '{"seq":'*'"type":"checkpoint","tenure":"'*)
+        if [ -n "$want_cp" ]; then
+          case $lline in
+            *"$want_cp$MARK_MANUAL\",\"prev\":\""* | *"$want_cp$MARK_AUTO\",\"prev\":\""*) ;;
+            *"$want_cp"*) cp_entry=$lline ;;
           esac
         fi
         continue
@@ -374,6 +423,102 @@ else
   fi
 fi
 
+# The seat is occupied and nothing is in doubt: seat.json, the log and
+# the tenure folders agree, and no stand-down is in force.
+greet=0
+if [ "$seat_state" -eq 0 ] && [ "$SEAT_STATUS" = occupied ] && [ -z "$behind_line$differs_line" ]; then
+  greet=1
+fi
+
+if [ "$mode" = title ]; then
+  [ "$greet" -eq 1 ] || exit 0
+  # A session that has a title of its own keeps it.
+  if [ ! -t 0 ]; then
+    while IFS= read -r in_line || [ -n "$in_line" ]; do
+      case $in_line in
+        *'"session_title"'*) exit 0 ;;
+      esac
+    done
+  fi
+  printf '{"hookSpecificOutput":{"hookEventName":"SessionStart","sessionTitle":"%s"}}\n' "$name"
+  exit 0
+fi
+
+# What the log's last checkpoint entry for this tenure recorded. The text
+# is the model's own summary, as log-append.sh stored it: one line, at
+# most 1,000 characters before escaping. It is shown in at most CP_MAX
+# characters, and not at all when it could not have been written by the
+# script (longer than that, or holding a control character).
+checkpoint_line=
+greet_line=
+if [ "$greet" -eq 1 ]; then
+  if [ -z "$cp_entry" ]; then
+    checkpoint_line="Last checkpoint: none recorded yet in this tenure."
+    last_words="that no checkpoint is recorded yet"
+  else
+    last_words="what your last checkpoint recorded"
+    cp_seq=${cp_entry#\{\"seq\":}
+    cp_seq=${cp_seq%%,*}
+    cp_ts=${cp_entry#*\"ts\":\"}
+    cp_ts=${cp_ts%%\"*}
+    cp_data=${cp_entry#*"$want_cp"}
+    cp_data=${cp_data%%\",\"prev\":\"*}
+    case $cp_seq in
+      '' | *[!0-9]*) cp_seq= ;;
+    esac
+    [ "${#cp_seq}" -le 9 ] || cp_seq=
+    case $cp_ts in
+      *[!0-9TZ:-]*) cp_ts= ;;
+    esac
+    [ "${#cp_ts}" -eq 20 ] || cp_ts=
+    cp_text=
+    if [ -n "$cp_seq" ] && [ -n "$cp_ts" ] && [ "${#cp_data}" -le 2000 ]; then
+      # The JSON escapes are taken out: a backslash stands before a
+      # quote or a backslash, and log-append.sh writes no other escape.
+      while :; do
+        case $cp_data in
+          *\\*)
+            cp_head=${cp_data%%\\*}
+            cp_rest=${cp_data#*\\}
+            cp_char=${cp_rest%"${cp_rest#?}"}
+            cp_text=$cp_text$cp_head$cp_char
+            cp_data=${cp_rest#?}
+            ;;
+          *)
+            cp_text=$cp_text$cp_data
+            break
+            ;;
+        esac
+      done
+      case $cp_text in
+        *[[:cntrl:]]*) cp_text= ;;
+      esac
+    fi
+    if [ -z "$cp_text" ]; then
+      checkpoint_line="Last checkpoint: the log's last checkpoint entry for this tenure cannot be shown here; the checkpoint note has it."
+    else
+      if [ "${#cp_text}" -gt "$CP_MAX" ]; then
+        # The first CP_MAX characters: a pattern of that many question
+        # marks takes them off the front, and what is left is cut off.
+        cp_q=
+        while [ "${#cp_q}" -lt "$CP_MAX" ]; do
+          cp_q="$cp_q?"
+        done
+        # shellcheck disable=SC2295
+        # (SC2295: the question marks are meant as a pattern.)
+        cp_rest=${cp_text#$cp_q}
+        cp_text="${cp_text%"$cp_rest"}..."
+      fi
+      checkpoint_line="Last checkpoint, as the log has it (entry $cp_seq, $cp_ts): $cp_text"
+    fi
+  fi
+  if [ "$mode" = compact ]; then
+    greet_line="The context of this session was just compacted. You are still $name, the officeholder seated in this project. What you remember of the work is now a summary: the checkpoint note and .succession/log.jsonl are the record to trust over memory. Read the charter and the latest checkpoint note before you continue, and open your next reply with one short line that says your name and $last_words."
+  else
+    greet_line="You are $name, the officeholder seated in this project. Read the charter and the latest checkpoint note before you continue the work. Open your first reply with one short line that says your name and $last_words."
+  fi
+fi
+
 count=0
 if [ -f "$S/lineage.jsonl" ] && [ ! -L "$S/lineage.jsonl" ]; then
   count=$(grep -c '"event":"seated"' "$S/lineage.jsonl" 2>/dev/null)
@@ -391,7 +536,7 @@ out="Succession status for this project, read from .succession/ by the plugin's 
 # One warning is enough to send the owner to look, and keeps the text
 # short: the folder that nobody knows about comes before the disagreement.
 [ -z "$behind_line" ] || differs_line=
-for piece in "$behind_line" "$differs_line" "$seat_line" "$charter_line" "$handoff_line" "$verdict_line" "$lineage_line" "$phrase_line"; do
+for piece in "$behind_line" "$differs_line" "$seat_line" "$charter_line" "$handoff_line" "$verdict_line" "$lineage_line" "$phrase_line" "$checkpoint_line" "$greet_line"; do
   [ -n "$piece" ] || continue
   out="$out$NL$piece"
 done

@@ -48,7 +48,7 @@
 LC_ALL=C
 export LC_ALL
 
-VERSION=0.9.0
+VERSION=0.9.1
 CR=$(printf '\r')
 NL='
 '

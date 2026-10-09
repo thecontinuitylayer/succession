@@ -18,7 +18,13 @@
 #   log-append.sh close <summary> [<last words>]
 #   log-append.sh vacate <reason>
 #   log-append.sh stand_down
+#   log-append.sh compact manual|auto                 (called by compact-mark.sh)
 #   log-append.sh verify <tenure> <verdict text>      (called by verify.sh)
+#
+# compact records that Claude Code is about to compact the session's
+# context. It adds one entry of the type "checkpoint" with a fixed text,
+# so that a log holding it reads the same to every version of verify.sh.
+# It changes no other file.
 #
 # Entry format, one JSON object per line, keys always in this order:
 #   {"seq":N,"ts":"...","type":"...","tenure":"...","data":"...","prev":"H","hash":"H"}
@@ -80,6 +86,7 @@ usage: log-append.sh charter
        log-append.sh close <summary> [<last words>]
        log-append.sh vacate <reason>
        log-append.sh stand_down
+       log-append.sh compact manual|auto
        log-append.sh verify <tenure> <verdict text>
 EOF
   exit 2
@@ -448,7 +455,8 @@ append_lineage() {
 # its own.
 #
 # How long a writer waits, by the clock:
-#   - a stand-down: 3 seconds, because its hook has 10 in all;
+#   - a stand-down, and the note of a compaction: 3 seconds, because
+#     their hooks have 10 in all;
 #   - any other write: for as long as the lock keeps changing hands, up
 #     to 90 seconds, so that a dozen writers on a slow machine all get
 #     their turn; it gives up sooner, after 20 seconds, when one and the
@@ -595,7 +603,9 @@ lock_busy() {
 lock() {
   lk_limit=90
   lk_same=20
-  if [ "$event" = stand_down ]; then
+  lk_short=0
+  if [ "$event" = stand_down ] || [ "$event" = compact ]; then
+    lk_short=1
     lk_limit=3
     lk_same=3
   fi
@@ -666,7 +676,7 @@ lock() {
         ;;
       *)
         [ "$lk_age" -lt "$lk_same" ] || lock_busy "$SINCE"
-        if [ "$SINCE" -ge 2 ] && [ "$event" != stand_down ]; then
+        if [ "$SINCE" -ge 2 ] && [ "$lk_short" -eq 0 ]; then
           lk_nap=0.4$lk_odd
         fi
         ;;
@@ -909,6 +919,22 @@ cmd_stand_down() {
   esac
 }
 
+# The text is fixed, and session-start.sh knows it by heart: an entry
+# with this text is the plugin's note, not a checkpoint of the
+# officeholder's.
+cmd_compact() {
+  [ $# -eq 1 ] || usage
+  case $1 in
+    manual | auto) ;;
+    *) usage ;;
+  esac
+  require_seat_file
+  [ "$SEAT_STATUS" = occupied ] || die "no officeholder is seated (seat status: $SEAT_STATUS)" 5
+  append_entry checkpoint "$SEAT_TENURE" "Context compacted ($1). Written by the plugin before Claude Code compacted the context, not by the officeholder."
+  printf 'Compaction noted for %s-%s.\n' "$SEAT_CODENAME" "$SEAT_ORDINAL"
+  print_entry
+}
+
 cmd_verify() {
   [ $# -eq 2 ] || usage
   is_tenure_name "$1" || die "not a tenure name: $1" 2
@@ -933,7 +959,7 @@ here=${0%/*}
 [ "$here" != "$0" ] || here=.
 
 case $event in
-  charter | seat | checkpoint | close | vacate | stand_down | verify) ;;
+  charter | seat | checkpoint | close | vacate | stand_down | compact | verify) ;;
   *) usage ;;
 esac
 
@@ -957,6 +983,7 @@ case $event in
   close) cmd_close "$@" ;;
   vacate) cmd_vacate "$@" ;;
   stand_down) cmd_stand_down "$@" ;;
+  compact) cmd_compact "$@" ;;
   verify) cmd_verify "$@" ;;
 esac
 exit 0
