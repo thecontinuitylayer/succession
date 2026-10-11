@@ -46,6 +46,9 @@ does not read its input. None of the three opens the transcript.
 
 Under `.succession/` in your project:
 
+- `seat.json` alone, holding a name and the time, at the first new
+  session in a git project that has nothing of Succession yet: the
+  plugin names the session by itself.
 - `seat.json`, `lineage.jsonl` and `log.jsonl`: who held the seat and when,
   to the second; checkpoint summaries, verification verdicts, stand-downs,
   the time of each compaction of a session's context while the seat was

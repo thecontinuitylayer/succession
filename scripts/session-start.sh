@@ -8,6 +8,11 @@
 #                               on the "compact" matcher)
 #   session-start.sh title      the session title and nothing else, as a
 #                               JSON document (startup, resume and fork)
+#   session-start.sh startup    the status text, for a session that has
+#   session-start.sh title startup   just started (hooks.json passes the
+#                               word on the "startup" matcher): the same,
+#                               after naming a project that has nothing
+#                               of Succession yet (see below)
 #
 # Prints at most 2,000 characters of plain text, which Claude Code adds
 # to the session's context: who holds the seat, where the charter is,
@@ -24,6 +29,15 @@
 # its first reply with its name and that checkpoint. After a compaction
 # it says that the note and the log are the record to trust over memory.
 #
+# A seat by name alone (seat.json reads "mode": "name", written by
+# "log-append.sh name") gets three lines and nothing else: who the
+# session is, that its first reply opens with the name, and one line
+# that says how to turn handoffs on. No seat status, charter, handoff,
+# verdict, lineage, stop phrase or checkpoint is mentioned, because none
+# is kept. "title" gives that name as the session's title. A name-mode
+# seat.json next to a log.jsonl is not taken as one: the seat then reads
+# as unknown, as for any seat.json that cannot be trusted.
+#
 # "title" prints {"hookSpecificOutput":{"hookEventName":"SessionStart",
 # "sessionTitle":"<Codename>-<NNN>"}} in that same state and nothing in
 # any other. The name is letters, digits and hyphens, so nothing in the
@@ -33,12 +47,24 @@
 # status stays plain text, so that the status still arrives where Claude
 # Code does not take the title.
 #
-# It prints nothing at all in a project that has no .succession folder,
-# and in that case it starts no other process: the folder is looked for
-# with shell builtins. Without "title" it does not read its standard
-# input. It never reads the conversation transcript. It reads the files
-# under <repo>/.succession and, to find that folder, the repository's
-# .git/config. It writes nothing.
+# A name at the first session start. With "startup", in a git
+# repository that has no seat.json, log, lineage or charter under
+# .succession (or no .succession folder at all), the hook first runs
+# "log-append.sh name --auto", which writes a seat by name alone with a
+# name of its own choosing, and then says what it says for any seat by
+# name alone. Both startup hooks run it; it takes the lock and writes
+# only when nothing is there yet, so they agree on one name. A resumed,
+# forked, cleared or compacted session is never named this way: it is a
+# conversation that was already going without a name, and a name
+# appearing in the middle of it would be a surprise.
+#
+# Apart from that, it prints nothing at all in a project that has no
+# .succession folder, and in that case it starts no other process: the
+# folder is looked for with shell builtins. Without "title" it does not
+# read its standard input. It never reads the conversation transcript.
+# It reads the files under <repo>/.succession and, to find that folder,
+# the repository's .git/config. It writes nothing itself; the name
+# above is written by log-append.sh.
 #
 # POSIX sh. No network. Always exits 0.
 
@@ -53,9 +79,20 @@ MARK_MANUAL='Context compacted (manual). Written by the plugin before Claude Cod
 MARK_AUTO='Context compacted (auto). Written by the plugin before Claude Code compacted the context, not by the officeholder.'
 
 mode=${1-}
+auto=0
 case $mode in
-  compact | title) ;;
+  startup) mode= auto=1 ;;
+  title) [ "${2-}" != startup ] || auto=1 ;;
+  compact) ;;
   *) mode= ;;
+esac
+
+# The plugin's scripts folder, for log-append.sh (before any cd).
+scripts=${0%/*}
+[ "$scripts" != "$0" ] || scripts=.
+case $scripts in
+  /*) ;;
+  *) scripts="$PWD/$scripts" ;;
 esac
 
 is_tenure_name() {
@@ -87,7 +124,8 @@ to_int() {
 # that holds a .git entry is taken as the repository root.
 #   returns 0: the repository has a .succession folder (git then names
 #              the root, as before).
-#   returns 1: there is no repository here, or it has no .succession folder.
+#   returns 1: there is no repository here, or it has no .succession folder
+#              (FS_REPO is 1 in the second case).
 #   returns 2: cannot tell without git. That is the answer when GIT_DIR or
 #              GIT_WORK_TREE is set, when the repository's own config
 #              names a work tree, for a network path, and under Git Bash
@@ -97,6 +135,7 @@ to_int() {
 # but is not a usable repository is still taken as the root, where git
 # would go on looking further up. The hook then stays silent.
 find_state() {
+  FS_REPO=0
   [ -z "${GIT_DIR+x}${GIT_WORK_TREE+x}" ] || return 2
   fs_p=$PWD
   case $fs_p in
@@ -115,6 +154,7 @@ find_state() {
   [ "$fs_p" != / ] || fs_p=
   while :; do
     if [ -f "$fs_p/.git" ] || [ -e "$fs_p/.git/HEAD" ]; then
+      FS_REPO=1
       if [ -f "$fs_p/.git/config" ]; then
         while IFS= read -r fs_line || [ -n "$fs_line" ]; do
           case $fs_line in
@@ -136,7 +176,8 @@ find_state() {
 }
 
 # Reads seat.json into SEAT_* without leaving the shell.
-# Returns 1 when there is no seat.json, 2 when it cannot be trusted.
+# Returns 1 when there is no seat.json, 2 when it cannot be trusted, 3
+# when it seats a name alone (SEAT_CODENAME is the name).
 # A carriage return at the end of a line (a CRLF checkout) needs no
 # handling here: every value is taken from between two double quotes.
 read_seat() {
@@ -146,6 +187,7 @@ read_seat() {
   SEAT_TENURE=
   SEAT_SEATED=
   SEAT_UPDATED=
+  SEAT_MODE=
   [ -e "$S/seat.json" ] || return 1
   [ -L "$S/seat.json" ] && return 2
   while IFS= read -r rs_line || [ -n "$rs_line" ]; do
@@ -165,8 +207,17 @@ read_seat() {
       tenure) SEAT_TENURE=$rs_val ;;
       seated) SEAT_SEATED=$rs_val ;;
       updated) SEAT_UPDATED=$rs_val ;;
+      mode) SEAT_MODE=$rs_val ;;
     esac
   done < "$S/seat.json"
+  if [ "$SEAT_MODE" = name ] && [ -z "$SEAT_STATUS$SEAT_ORDINAL$SEAT_TENURE" ]; then
+    case $SEAT_CODENAME in
+      '' | *[!A-Za-z0-9-]* | [!A-Za-z]*) return 2 ;;
+    esac
+    [ "${#SEAT_CODENAME}" -le 32 ] || return 2
+    [ ! -e "$S/log.jsonl" ] || return 2
+    return 3
+  fi
   case $SEAT_STATUS in
     vacant | occupied | stood_down) ;;
     *) return 2 ;;
@@ -214,16 +265,53 @@ is_verdict() {
 unset CDPATH
 cd -P -- "${CLAUDE_PROJECT_DIR:-.}" > /dev/null 2>&1 || exit 0
 find_state
-[ $? -ne 1 ] || exit 0
+if [ $? -eq 1 ]; then
+  [ "$auto" -eq 1 ] && [ "$FS_REPO" -eq 1 ] || exit 0
+fi
 command -v git > /dev/null 2>&1 || exit 0
 root=$(git rev-parse --show-toplevel 2> /dev/null) || exit 0
 [ -n "$root" ] || exit 0
 S="$root/.succession"
+# A first session start in a project with nothing of Succession: a name.
+if [ "$auto" -eq 1 ] && [ ! -L "$S" ]; then
+  auto_name=1
+  for f in seat.json log.jsonl lineage.jsonl charter.md; do
+    if [ -e "$S/$f" ] || [ -L "$S/$f" ]; then
+      auto_name=0
+    fi
+  done
+  if [ "$auto_name" -eq 1 ]; then
+    sh "$scripts/log-append.sh" name --auto > /dev/null 2>&1 < /dev/null
+  fi
+fi
 [ -d "$S" ] || exit 0
 [ -L "$S" ] && exit 0
 
 read_seat
 seat_state=$?
+
+# A seat by name alone: the name, how to open the first reply, and one
+# line on how to turn handoffs on. Nothing else is kept, so nothing else
+# is said.
+if [ "$seat_state" -eq 3 ]; then
+  if [ "$mode" = title ]; then
+    if [ ! -t 0 ]; then
+      while IFS= read -r in_line || [ -n "$in_line" ]; do
+        case $in_line in
+          *'"session_title"'*) exit 0 ;;
+        esac
+      done
+    fi
+    printf '{"hookSpecificOutput":{"hookEventName":"SessionStart","sessionTitle":"%s"}}\n' "$SEAT_CODENAME"
+    exit 0
+  fi
+  which_reply=first
+  [ "$mode" != compact ] || which_reply=next
+  printf 'Succession, by name alone, read from .succession/seat.json by the plugin'"'"'s session-start hook.\n'
+  printf 'You are %s in this project. Open your %s reply with one short line that says your name, then give the owner the next line once, as it is.\n' "$SEAT_CODENAME" "$which_reply"
+  printf 'Handoffs are off. To turn them on and keep the name %s, send /succession:seat.\n' "$SEAT_CODENAME"
+  exit 0
+fi
 
 # The latest handoff is the one in the highest-numbered tenure folder.
 # The highest-numbered folder of all is remembered too.

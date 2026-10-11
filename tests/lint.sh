@@ -118,6 +118,7 @@ unknown=$(awk '
     ok["seat", root "verify.sh\")"] = 1
     ok["seat", root "log-append.sh\" seat *)"] = 1
     ok["seat", root "log-append.sh\" charter)"] = 1
+    ok["seat", root "log-append.sh\" name *)"] = 1
     ok["checkpoint", root "log-append.sh\" checkpoint *)"] = 1
     ok["checkpoint", root "verify.sh\" --draft --checkpoints)"] = 1
     ok["checkpoint", "Edit(.succession/tenures/*/checkpoints.md)"] = 1
@@ -151,10 +152,10 @@ unknown=$(awk '
     next
   }
   { inlist = 0 }
-  END { if (seen != 10) printf "expected 10 entries in the four skills, found %d\n", seen + 0 }
+  END { if (seen != 11) printf "expected 11 entries in the four skills, found %d\n", seen + 0 }
 ' skills/*/SKILL.md)
 if [ -z "$unknown" ]; then
-  printf 'allowed-tools: 10 entries in three skills, each one a plugin script form or a named file under .succession/\n'
+  printf 'allowed-tools: 11 entries in three skills, each one a plugin script form or a named file under .succession/\n'
 else
   printf '%s\n' "$unknown"
   status=1

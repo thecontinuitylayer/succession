@@ -3,7 +3,22 @@
   "hooks": {
     "SessionStart": [
       {
-        "matcher": "startup|resume|fork",
+        "matcher": "startup",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "sh \"${CLAUDE_PLUGIN_ROOT}/scripts/session-start.sh\" startup",
+            "timeout": 10
+          },
+          {
+            "type": "command",
+            "command": "sh \"${CLAUDE_PLUGIN_ROOT}/scripts/session-start.sh\" title startup",
+            "timeout": 10
+          }
+        ]
+      },
+      {
+        "matcher": "resume|fork",
         "hooks": [
           {
             "type": "command",

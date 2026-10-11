@@ -20,6 +20,23 @@ exists. It does not mean the sentence beside the pointer is true: no
 script can tell whether "fixes the login bug" is so. The verdict tells
 you which claims rest on something real, and where to look yourself.
 
+## Start small
+
+You do not have to take all of it at once.
+
+1. **A name.** Once the plugin is installed, the next new session in a
+   git project starts with a name, such as `Sextant`, and keeps nothing
+   else: no charter, no log, no checkpoints, no handoffs. The session
+   opens with its name and one line on how to turn handoffs on, and the
+   name stays for the sessions after it. `/succession:seat --name
+   Compass` changes it. Free, like the rest of the plugin.
+2. **Handoffs.** `/succession:seat` turns them on and keeps the name:
+   `Sextant` becomes `Sextant-001`, with checkpoints, a close and a
+   handoff whose pointers the next session's script checks. Everything below describes
+   this.
+3. **Help setting it up.** Succession Install is a paid setup service:
+   https://thecontinuitylayer.com/succession-install
+
 ## Install
 
 In a Claude Code session, version 2.1.275 or later:
@@ -88,6 +105,7 @@ no network call.
 
 | You type | What happens |
 | --- | --- |
+| `/succession:seat --name` | The session gets a name and nothing else is kept. The newcomer proposes one; you confirm with `/succession:seat --name Sextant`, or give the name with `--name` straight away. See [Start small](#start-small). |
 | `/succession:seat` | A script checks the pointers in the previous handoff and prints a counted verdict. Then the newcomer proposes a name, you confirm, and it takes the seat as, say, `Astrolabe-002`. |
 | `/succession:checkpoint` | A dated note of what was done and where the proof is in git. |
 | `/succession:close` | The officeholder writes a handoff and a short note of lessons, and the seat goes vacant. |
@@ -471,6 +489,21 @@ None of this is added when the seat is vacant, when the officeholder
 was stood down, or when the session start has a `WARNING:` to give.
 Then the text is what it was before.
 
+**With a name and nothing else** (`/succession:seat --name`, or by
+itself at the next new session in a git project where `.succession/`
+holds no seat, log, lineage or charter yet), `seat.json` reads `"mode": "name"` and holds the name. The session
+start then prints three lines and no more: that the session is, say,
+`Sextant`; to open its reply with its name; and this one line for
+you: "Handoffs are off. To turn them on and keep the name Sextant, send
+/succession:seat." The title hook gives `Sextant` as the session title.
+Nothing is written to a log, the stop phrase and the compaction hook do
+nothing, and the checkpoint and close scripts refuse with a line that
+says how to turn handoffs on. `/succession:seat` then seats `Sextant`
+in full: it runs the verifier, writes the charter and makes the number,
+and the name-mode `seat.json` is replaced by the full one. A name-mode
+`seat.json` is refused in a project that already keeps a log, and is
+not trusted when a log is found next to it.
+
 The limits:
 
 - The checkpoint summary is text a model wrote, passed on from the log
@@ -492,7 +525,7 @@ The limits:
 ```
 .succession/
   charter.md        one page: what the officeholder may do alone
-  seat.json         who holds the seat now
+  seat.json         who holds the seat now, or the name alone ("mode": "name")
   lineage.jsonl     one line when an officeholder is seated, one when it leaves
   log.jsonl         the hash-chained log
   tenures/
@@ -525,17 +558,19 @@ Five POSIX shell scripts, and nothing else. No `jq`, `node` or `python`.
 
 | Script | When | What it does |
 | --- | --- | --- |
-| `scripts/session-start.sh` | Session start, resume, clear, compact, fork (a hook) | Prints up to 2,000 characters: seat status, charter path, latest handoff path and the verdict in the log's last verify entry for it, and a warning when the state files look older than the tenure folders. With the seat held and no warning: the last checkpoint in the log and who the session is (see [Coming back by name](#coming-back-by-name)). Prints nothing in a project without `.succession/`. Writes nothing. |
-| `scripts/session-start.sh title` | New session, resume, fork (a second hook) | With the seat held and no warning, prints one JSON document that gives Claude Code the officeholder's name as the session's title. Otherwise prints nothing. Its input is read for one thing: whether the session already has a title. |
+| `scripts/session-start.sh` | Session start, resume, clear, compact, fork (a hook) | Prints up to 2,000 characters: seat status, charter path, latest handoff path and the verdict in the log's last verify entry for it, and a warning when the state files look older than the tenure folders. With the seat held and no warning: the last checkpoint in the log and who the session is (see [Coming back by name](#coming-back-by-name)). With a name and nothing else: three lines, the name and how to turn handoffs on. At a new session (`startup`) in a git project with no seat, log, lineage or charter, has `log-append.sh name --auto` write a name before it prints. Otherwise prints nothing in a project without `.succession/`, and writes nothing. |
+| `scripts/session-start.sh title` | New session, resume, fork (a second hook) | With the seat held and no warning, or with a name and nothing else, prints one JSON document that gives Claude Code the officeholder's name as the session's title. Otherwise prints nothing. Its input is read for one thing: whether the session already has a title. |
 | `scripts/compact-mark.sh` | Before a compaction (a hook) | With the seat held, has `log-append.sh` add one entry to the log. Prints nothing, always exits 0. |
 | `scripts/stand-down.sh` | Every submitted prompt (a hook) | Compares the prompt with the stop phrase. On a match, calls `log-append.sh`. The prompt is examined in memory and is never stored. |
 | `scripts/verify.sh` | When the seat, checkpoint or close skill calls it | Checks pointers and the log chain with `git cat-file`, `git rev-parse` and `git merge-base`, and the handoff against the sha256 in its close entry; writes `verification.md`. |
-| `scripts/log-append.sh` | When a skill, the hook or `verify.sh` calls it | The single writer of `log.jsonl`, `seat.json` and `lineage.jsonl`. Writes the charter from the template when the project has none. At a close it also asks `git status` and `git check-ignore` about `.succession/`, to print the last line of the close. It stages and commits nothing. |
+| `scripts/log-append.sh` | When a skill, the hook or `verify.sh` calls it | The single writer of `log.jsonl`, `seat.json` and `lineage.jsonl`. With `name --auto`, called by both startup hooks, it writes a name-mode `seat.json` under its lock when there is none yet, so the two agree on one name. Writes the charter from the template when the project has none. At a close it also asks `git status` and `git check-ignore` about `.succession/`, to print the last line of the close. It stages and commits nothing. |
 
 The session-start and prompt hooks are kept cheap, because one of them
 runs on every prompt and starting a process is slow on Windows. In a
 project without `.succession/`, neither starts another process: they
-look for the folder with shell builtins. (The hook before a compaction
+look for the folder with shell builtins. (The one exception is a
+new session in a git project with nothing of Succession yet, which
+starts `git` and `log-append.sh` once to write the name.) (The hook before a compaction
 runs seldom and asks `git` each time.) The prompt hook also starts none while nobody
 holds the seat, and one `awk` process while somebody does. (Where the
 repository root cannot be found by looking at folders, for instance when
@@ -569,12 +604,12 @@ when it did not.
 
 | Skill | Approved in advance |
 | --- | --- |
-| `seat` | `verify.sh` with no arguments. `log-append.sh charter`, which writes the template charter when there is none and never changes one that is there. `log-append.sh seat <Codename>`. |
+| `seat` | `verify.sh` with no arguments. `log-append.sh charter`, which writes the template charter when there is none and never changes one that is there. `log-append.sh seat <Codename>`. `log-append.sh name <Codename>`, which writes `seat.json` with the name and nothing else. |
 | `checkpoint` | `log-append.sh checkpoint <summary>`. `verify.sh --draft --checkpoints`. Writing `checkpoints.md` in a tenure folder under `.succession/tenures/`. |
 | `close` | `verify.sh --draft`. `log-append.sh close <summary> <last words>`. Writing `handoff.md` and `lessons.md` in a tenure folder under `.succession/tenures/`. |
 | `lineage` | Nothing. It reads files in your project, which Claude Code allows anyway. |
 
-That is the whole list: ten entries. Each script is named by its full path
+That is the whole list: eleven entries. Each script is named by its full path
 inside the plugin folder, and each file by its name and its place under
 `.succession/`. `sh tests/lint.sh` fails when a skill lists anything else.
 
@@ -756,6 +791,10 @@ What has been run for real, by Claude Code itself:
 
 What has not:
 
+- `/succession:seat --name`, and the step from it to `/succession:seat`,
+  in a real Claude Code session. The scripts behind them are run by
+  `tests/name.sh`; the skill's wording has not been run by a model yet.
+
 - A real session on macOS, of any kind. There the scripts were run by the
   workflow, in the shell Claude Code uses for hooks, and not by Claude
   Code itself.
@@ -806,7 +845,7 @@ What has not:
 ## Tests
 
 ```
-sh tests/run.sh        # three tenures, the stop phrase, hostile claims, session start, compaction, the log, the close, safety
+sh tests/run.sh        # three tenures, the stop phrase, hostile claims, session start, compaction, a name alone, the log, the close, safety
 sh tests/autocrlf.sh   # the whole suite again in a core.autocrlf=true clone
 sh tests/lint.sh       # shellcheck, POSIX syntax, the approvals list, copies of shared text, one version
 sh tests/bench.sh      # wall time of the two hooks
@@ -835,7 +874,7 @@ answered in six real sessions, and says so in its opening lines.
 
 ## Version and license
 
-Version 0.9.1. It becomes 1.0.0 once a real session on macOS, an
+Version 0.9.2. It becomes 1.0.0 once a real session on macOS, an
 interactive session in a terminal and the one-line install have been
 run. Changes are in [CHANGELOG.md](CHANGELOG.md). To report a security
 problem, see [SECURITY.md](SECURITY.md). MIT; see [LICENSE](LICENSE).

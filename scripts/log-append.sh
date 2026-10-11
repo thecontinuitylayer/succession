@@ -13,6 +13,8 @@
 #
 # Usage:
 #   log-append.sh charter
+#   log-append.sh name <Codename>
+#   log-append.sh name --auto                         (called by session-start.sh)
 #   log-append.sh seat <Codename>
 #   log-append.sh checkpoint <summary>
 #   log-append.sh close <summary> [<last words>]
@@ -20,6 +22,24 @@
 #   log-append.sh stand_down
 #   log-append.sh compact manual|auto                 (called by compact-mark.sh)
 #   log-append.sh verify <tenure> <verdict text>      (called by verify.sh)
+#
+# name seats a session by its name and nothing else: it writes
+# seat.json with "mode": "name" and the codename, and no log entry, no
+# lineage record, no tenure folder and no charter. It is refused in a
+# project that already keeps a log or a full seat. Run again, it changes
+# the name. A later "seat" with the same codename turns handoffs on and
+# keeps the name: the name-mode seat.json is replaced by the full one.
+#
+# name --auto is the same seat by name alone, with a name the script
+# chooses, for a project that has nothing of Succession yet. It does
+# nothing and prints nothing when the project already has a seat.json,
+# a log, a lineage or a charter: under the lock, the first caller writes
+# the name and every later one finds it there, so the two session-start
+# hooks, which Claude Code runs at the same time, cannot end up with two
+# names. The name comes from .succession/names.md when the owner keeps
+# one, otherwise from the default theme in skills/_shared/name-themes.md,
+# and is picked by the repository's path, so the same project gets the
+# same name. It prints nothing on success: the hook reads seat.json.
 #
 # compact records that Claude Code is about to compact the session's
 # context. It adds one entry of the type "checkpoint" with a fixed text,
@@ -81,6 +101,8 @@ die() {
 usage() {
   cat >&2 <<'EOF'
 usage: log-append.sh charter
+       log-append.sh name <Codename>
+       log-append.sh name --auto
        log-append.sh seat <Codename>
        log-append.sh checkpoint <summary>
        log-append.sh close <summary> [<last words>]
@@ -159,13 +181,15 @@ is_tenure_name() {
 }
 
 # Reads seat.json into SEAT_* without leaving the shell.
-# Returns 1 when there is no seat.json, 2 when it cannot be trusted.
+# Returns 1 when there is no seat.json, 2 when it cannot be trusted, 3
+# when it seats a name alone ("mode": "name"; SEAT_CODENAME is the name).
 read_seat() {
   SEAT_STATUS=
   SEAT_ORDINAL=
   SEAT_CODENAME=
   SEAT_TENURE=
   SEAT_SEATED=
+  SEAT_MODE=
   [ -e "$S/seat.json" ] || return 1
   [ -L "$S/seat.json" ] && return 2
   while IFS= read -r rs_line || [ -n "$rs_line" ]; do
@@ -185,8 +209,13 @@ read_seat() {
       codename) SEAT_CODENAME=$rs_val ;;
       tenure) SEAT_TENURE=$rs_val ;;
       seated) SEAT_SEATED=$rs_val ;;
+      mode) SEAT_MODE=$rs_val ;;
     esac
   done < "$S/seat.json"
+  if [ "$SEAT_MODE" = name ] && [ -z "$SEAT_STATUS$SEAT_ORDINAL$SEAT_TENURE" ]; then
+    valid_code "$SEAT_CODENAME" || return 2
+    return 3
+  fi
   case $SEAT_STATUS in
     vacant | occupied | stood_down) ;;
     *) return 2 ;;
@@ -202,6 +231,17 @@ read_seat() {
     *[!0-9TZ:-]*) return 2 ;;
   esac
   return 0
+}
+
+# valid_code <Codename>: letters, digits and hyphens, starting with a
+# letter, not ending with a hyphen, at most 32 characters.
+valid_code() {
+  case $1 in
+    '' | *[!A-Za-z0-9-]* | *-) return 1 ;;
+    [A-Za-z]*) ;;
+    *) return 1 ;;
+  esac
+  [ "${#1}" -le 32 ]
 }
 
 write_seat() {
@@ -455,8 +495,9 @@ append_lineage() {
 # its own.
 #
 # How long a writer waits, by the clock:
-#   - a stand-down, and the note of a compaction: 3 seconds, because
-#     their hooks have 10 in all;
+#   - a stand-down, the note of a compaction and a name chosen at
+#     session start (name --auto): 3 seconds, because their hooks have
+#     10 in all;
 #   - any other write: for as long as the lock keeps changing hands, up
 #     to 90 seconds, so that a dozen writers on a slow machine all get
 #     their turn; it gives up sooner, after 20 seconds, when one and the
@@ -604,7 +645,7 @@ lock() {
   lk_limit=90
   lk_same=20
   lk_short=0
-  if [ "$event" = stand_down ] || [ "$event" = compact ]; then
+  if [ "$event" = stand_down ] || [ "$event" = compact ] || [ "$event:${1-}" = name:--auto ]; then
     lk_short=1
     lk_limit=3
     lk_same=3
@@ -690,6 +731,7 @@ require_seat_file() {
   case $? in
     0) ;;
     1) die "no officeholder is seated in this project" 5 ;;
+    3) die "$SEAT_CODENAME is seated by name alone, so there is no tenure to record this in. /succession:seat turns handoffs on and keeps the name." 5 ;;
     *) die "seat.json cannot be read. Compare it with lineage.jsonl and repair it by hand." 4 ;;
   esac
 }
@@ -707,6 +749,8 @@ cmd_seat() {
   read_seat
   case $? in
     0 | 1) ;;
+    # A seat by name alone is replaced by this one: handoffs are turned on.
+    3) SEAT_CODENAME= ;;
     *) die "seat.json cannot be read. Compare it with lineage.jsonl and repair it by hand." 4 ;;
   esac
   case $SEAT_STATUS in
@@ -780,6 +824,105 @@ cmd_seat() {
   if [ -n "$behind" ]; then
     printf 'WARNING: the folder .succession/tenures/%s is there, but seat.json and the log do not show that tenure. The state files were probably put back to an older version: git stash, git checkout and git reset --hard do that to tracked files. A seating, a checkpoint or a stand-down may be missing from the record. Tell the owner now; "git stash list" and "git reflog" are where to look for the newer files.\n' "$behind"
   fi
+}
+
+# pick_name: a codename for "name --auto", in PICKED. The names are
+# taken from .succession/names.md (one per line or separated by commas)
+# when it is a plain file, otherwise from the default theme of
+# name-themes.md. Anything that is not a valid codename is passed over.
+# Which one is picked depends on the repository's path alone.
+pick_name() {
+  PICKED=
+  pn_src="$S/names.md"
+  pn_all=1
+  if [ ! -f "$pn_src" ] || [ -L "$pn_src" ]; then
+    pn_src="$here/../skills/_shared/name-themes.md"
+    pn_all=0
+  fi
+  pn_list=
+  pn_n=0
+  pn_in=$pn_all
+  if [ -f "$pn_src" ]; then
+    while IFS= read -r pn_line || [ -n "$pn_line" ]; do
+      pn_line=${pn_line%"$CR"}
+      if [ "$pn_all" -eq 0 ]; then
+        case $pn_line in
+          '## Default theme'*) pn_in=1; continue ;;
+          '#'*) pn_in=0; continue ;;
+        esac
+      fi
+      [ "$pn_in" -eq 1 ] || continue
+      pn_rest=$pn_line,
+      while [ -n "$pn_rest" ]; do
+        pn_word=${pn_rest%%,*}
+        pn_rest=${pn_rest#*,}
+        pn_word=${pn_word#"${pn_word%%[! ]*}"}
+        pn_word=${pn_word%"${pn_word##*[! ]}"}
+        valid_code "$pn_word" || continue
+        pn_list="$pn_list $pn_word"
+        pn_n=$((pn_n + 1))
+      done
+    done < "$pn_src"
+  fi
+  if [ "$pn_n" -eq 0 ]; then
+    PICKED=Sextant
+    return 0
+  fi
+  pn_sum=$(printf '%s' "$root" | cksum)
+  pn_sum=${pn_sum%% *}
+  case $pn_sum in
+    '' | *[!0-9]*) pn_sum=0 ;;
+  esac
+  pn_i=$((pn_sum % pn_n))
+  for pn_word in $pn_list; do
+    if [ "$pn_i" -eq 0 ]; then
+      PICKED=$pn_word
+      return 0
+    fi
+    pn_i=$((pn_i - 1))
+  done
+  PICKED=Sextant
+}
+
+# A seat by name alone. Writes seat.json and nothing else.
+cmd_name() {
+  [ $# -eq 1 ] || usage
+  code=$1
+  auto=0
+  if [ "$code" = --auto ]; then
+    # Only a project with nothing of Succession in it is named this way.
+    for na_f in seat.json log.jsonl lineage.jsonl charter.md; do
+      if [ -e "$S/$na_f" ] || [ -L "$S/$na_f" ]; then
+        return 0
+      fi
+    done
+    pick_name
+    code=$PICKED
+    auto=1
+  fi
+  valid_code "$code" || die "a codename is letters, digits and hyphens, starting with a letter, at most 32 characters (got: $code)" 2
+  read_seat
+  case $? in
+    1 | 3) ;;
+    *) die "this project already keeps handoffs (see .succession/seat.json). A seat by name alone is for a project that has none." 5 ;;
+  esac
+  if [ -s "$S/log.jsonl" ] || [ -s "$S/lineage.jsonl" ]; then
+    die "this project already keeps handoffs (see .succession/log.jsonl). A seat by name alone is for a project that has none." 5
+  fi
+  ts=$(now_utc)
+  ws_tmp="$S/seat.json.tmp"
+  fresh_file "$ws_tmp"
+  {
+    printf '{\n'
+    printf '  "mode": "name",\n'
+    printf '  "codename": "%s",\n' "$code"
+    printf '  "updated": "%s"\n' "$ts"
+    printf '}\n'
+  } > "$ws_tmp" || die "cannot write $ws_tmp" 4
+  mv -f "$ws_tmp" "$S/seat.json" || die "cannot write seat.json" 4
+  [ "$auto" -eq 0 ] || return 0
+  printf 'Named: %s. Nothing else is kept: no log, no checkpoints, no handoffs.\n' "$code"
+  printf 'Handoffs are off. To turn them on and keep the name %s, send /succession:seat.\n' "$code"
 }
 
 cmd_charter() {
@@ -959,11 +1102,14 @@ here=${0%/*}
 [ "$here" != "$0" ] || here=.
 
 case $event in
-  charter | seat | checkpoint | close | vacate | stand_down | compact | verify) ;;
+  charter | name | seat | checkpoint | close | vacate | stand_down | compact | verify) ;;
   *) usage ;;
 esac
 
 refuse_symlink "$S"
+if [ "$event" = name ]; then
+  mkdir -p "$S" || die "cannot create $S" 4
+fi
 if [ "$event" = seat ] || [ "$event" = charter ]; then
   mkdir -p "$S" || die "cannot create $S" 4
   refuse_symlink "$S/tenures"
@@ -975,9 +1121,10 @@ refuse_symlink "$S/seat.json"
 refuse_symlink "$S/log.jsonl"
 refuse_symlink "$S/lineage.jsonl"
 
-lock
+lock "$@"
 case $event in
   charter) cmd_charter "$@" ;;
+  name) cmd_name "$@" ;;
   seat) cmd_seat "$@" ;;
   checkpoint) cmd_checkpoint "$@" ;;
   close) cmd_close "$@" ;;

@@ -10,6 +10,8 @@
 #   session-start.sh   the 2,000-character limit with a 50-entry lineage; the name, the last
 #                      checkpoint and the session title an occupied seat adds
 #   compact.sh         the note a compaction leaves in the log
+#   name.sh            a seat by name alone, and turning handoffs on from it
+#   first-start.sh     a name at the first session start in a fresh project
 #   log.sh             several writers at once, and each kind of damage to the log
 #   close.sh           the last line of a close: where .succession/ stands in git
 #   safety.sh          no write through a link, the handoff bound to the log, state put back by git
@@ -22,7 +24,7 @@
 
 here=$(cd "$(dirname "$0")" && pwd)
 failed=
-for part in three-tenures stand-down claims session-start compact log close safety; do
+for part in three-tenures stand-down claims session-start compact name first-start log close safety; do
   if ! "${SUCCESSION_SH:-sh}" "$here/$part.sh"; then
     failed="$failed $part"
   fi
@@ -33,5 +35,5 @@ if [ -n "$failed" ]; then
   printf 'SUITE FAILED:%s\n' "$failed"
   exit 1
 fi
-printf 'SUITE PASSED: three-tenures stand-down claims session-start compact log close safety\n'
+printf 'SUITE PASSED: three-tenures stand-down claims session-start compact name first-start log close safety\n'
 exit 0

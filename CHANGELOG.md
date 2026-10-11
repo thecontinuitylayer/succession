@@ -1,5 +1,44 @@
 # Changelog
 
+## 0.9.2
+
+A lighter way in: a session can have a name and nothing else, and the
+first one gets it by itself. Full mode is unchanged.
+
+- **A name at the first session start.** After the plugin is
+  installed, the next new session in a git project that has nothing of
+  Succession yet starts with a name: the startup hook picks one from
+  the navigation instruments (or from `.succession/names.md`), writes
+  it as a seat by name alone, and the session opens with it. The only
+  other line is how to turn handoffs on. The two startup hooks write it
+  through one locked call, `log-append.sh name --auto`, so they agree on
+  the name, and the title is that name from the first session. Nothing
+  is written outside a git repository, where a seat, a log, a lineage
+  or a charter is already there, or for a resumed, forked, cleared or
+  compacted session.
+
+- **`/succession:seat --name [Codename]`.** Runs the new
+  `log-append.sh name <Codename>`, which writes `seat.json` with
+  `"mode": "name"` and the codename, and nothing else: no log entry, no
+  lineage record, no tenure folder, no charter, no verifier run. It is
+  refused in a project that already keeps a log or a full seat. Run
+  again, it changes the name.
+- **Session start, with a name alone.** Three lines: the session's
+  name, that its first reply opens with it, and one line on how to turn
+  handoffs on. Nothing about checkpoints, handoffs, the verifier, the
+  lineage or the stop phrase. The title hook gives the name as the
+  session title. The prompt and compaction hooks do nothing, and the
+  checkpoint, close, vacate and stand-down events refuse with the line
+  on turning handoffs on.
+- **Turning handoffs on.** `/succession:seat` on a name-mode seat seats
+  the same name in full, without proposing another: `Sextant` becomes
+  `Sextant-001`.
+- **Pre-approvals.** The seat skill gains one: `log-append.sh name
+  <Codename>`. Eleven entries in all.
+- **README.** A "Start small" section near the top.
+- **Tests.** `tests/name.sh` and `tests/first-start.sh`, run by
+  `tests/run.sh`.
+
 ## 0.9.1
 
 A session that ends without a close, or whose context is compacted,

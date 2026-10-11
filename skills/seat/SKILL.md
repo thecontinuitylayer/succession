@@ -1,11 +1,12 @@
 ---
 name: seat
-description: Seat a new named officeholder in this project. Runs the verify script on the previous handoff and shows its verdict to the owner before the seat is claimed. Use when the owner asks to take the seat, seat a successor or start a tenure.
-argument-hint: "[Codename]"
+description: Seat a new named officeholder in this project. Runs the verify script on the previous handoff and shows its verdict to the owner before the seat is claimed. With --name, gives the session a name and nothing else. Use when the owner asks to take the seat, seat a successor, start a tenure, name the session, or turn handoffs on.
+argument-hint: "[--name] [Codename]"
 allowed-tools:
   - Bash(sh "${CLAUDE_PLUGIN_ROOT}/scripts/verify.sh")
   - Bash(sh "${CLAUDE_PLUGIN_ROOT}/scripts/log-append.sh" charter)
   - Bash(sh "${CLAUDE_PLUGIN_ROOT}/scripts/log-append.sh" seat *)
+  - Bash(sh "${CLAUDE_PLUGIN_ROOT}/scripts/log-append.sh" name *)
 ---
 
 # Take the seat
@@ -30,6 +31,30 @@ The owner's text after `/succession:seat`, if there was any: `$ARGUMENTS`
   conversation, is the owner confirming that name. Go straight to step 5.
 - A codename there at the start is the name the owner wants. Do steps 1
   to 3, then propose that name in step 4.
+- `--name` there, with or without a codename after it: the owner wants a
+  name and nothing else. Follow "A name and nothing else" below instead
+  of steps 1 to 5.
+
+## A name and nothing else
+
+This is the light way in. The session gets a name; nothing else is
+kept: no charter, no log, no checkpoints, no handoffs, no verifier. Do
+not run `verify.sh` and do not write a charter for it.
+
+- If `--name` came with a codename, run the command below with it
+  straight away.
+- If it came alone, propose a codename in one line, chosen as in step 4,
+  and say how to confirm, for example: "I'll be called Sextant. To
+  confirm, send `/succession:seat --name Sextant`." Then stop and wait.
+
+```
+sh "${CLAUDE_PLUGIN_ROOT}/scripts/log-append.sh" name <Codename>
+```
+
+If the script refuses because the project already keeps handoffs, tell
+the owner its message and stop. Otherwise give the owner its two lines
+as they are, and stop. Do not mention checkpoints, the close or the stop
+phrase: none of them applies to a seat by name alone.
 
 ## 1. Run the verifier before anything else
 
@@ -77,6 +102,9 @@ Read `.succession/seat.json` if it exists.
   closed. With the owner's agreement, record it with `vacate` as above, then
   continue.
 - `"status": "vacant"`, or no file: continue.
+- `"mode": "name"`: the session has a name and handoffs are off. The
+  owner is turning them on. Continue; in step 4 the name is the one in
+  that file, and nothing is proposed.
 
 ## 3. Read what governs you
 
@@ -105,6 +133,13 @@ Read `.succession/seat.json` if it exists.
   says to. Run it when the owner or the charter gives you that authority.
 
 ## 4. Propose your name
+
+If `.succession/seat.json` read `"mode": "name"` in step 2, the owner
+chose your name already. Do not propose another: go straight to step 5
+with the `codename` from that file, unless the owner named a different
+one in `$ARGUMENTS`. The script then replaces the name-mode seat with a
+full one and adds the number, for example `Sextant` becomes
+`Sextant-001`.
 
 Choose a codename from `.succession/names.md` if the owner keeps one,
 otherwise from the block `name-themes.md` at the end of this skill
