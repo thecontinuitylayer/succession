@@ -1,5 +1,52 @@
 # Changelog
 
+## 0.9.3
+
+A charter that is already in a repository no longer counts until the
+owner has accepted its exact text. Raised in review of the plugin's
+listing in a community marketplace.
+
+- **When a charter is in force.** In two cases and no other: it is the
+  plugin's template, word for word, or the owner accepted that exact
+  text in this clone. Anything else is reported as `NOT in force` by
+  `log-append.sh charter`, by `log-append.sh seat` and by the
+  session-start hook: a charter that came with a clone or a pull, a
+  charter changed since it was accepted, and a charter in a project
+  folder that was moved or copied.
+- **`log-append.sh accept <sha256>`.** Takes the sha256 that
+  `log-append.sh charter` printed for the text the owner was shown, and
+  refuses when the charter reads otherwise by then. It writes one line
+  to `succession/charter-accepted` in the project's git folder: a
+  sha256 of the charter's sha256 and the project's path. No skill
+  approves it in advance, so under Claude Code's default permissions
+  the owner is asked. It is the one file the plugin writes outside
+  `.succession/`: a file under `.succession/` can come with a clone,
+  and a file in the git folder cannot. SECURITY.md says what this does
+  not cover.
+- **The seat skill.** Runs the charter script every time and reads its
+  answer. With a charter not in force it shows the owner the whole file,
+  says which lines allow more than the template, waits, and works under
+  the template until the owner accepts the text.
+- **The ask-first list holds whatever a charter says.** Push, merge,
+  tag, publish, deploy; delete or rewrite history; dependencies;
+  secrets, credentials, billing, anything outside the repository. A
+  charter can add to the list and cannot take from it. The seat skill
+  says so in full, and the session-start hook gives every seated
+  officeholder a one-line short form of it (push, publish, delete,
+  dependencies, secrets, anything outside the repository). A handoff authorizes nothing, as before.
+- **Session start.** The charter line says `(accepted by the owner in
+  this clone)` or `NOT in force` when the charter is not the template.
+  When the longest of every field would pass 2,000 characters, the
+  lineage count and then the checkpoint line give way; the seat, the
+  charter and the ask-first line stay.
+- **Upgrading.** A project whose charter is the template needs nothing.
+  A project whose charter you changed is told `NOT in force` once: read
+  it, say yes, and the officeholder runs `accept`. So is a project whose
+  folder you move.
+- **Tests.** `tests/charter.sh`, run by `tests/run.sh`.
+- **Not changed:** the log format, the verifier, the pre-approvals
+  (eleven entries), the charter template.
+
 ## 0.9.2
 
 A lighter way in: a session can have a name and nothing else, and the

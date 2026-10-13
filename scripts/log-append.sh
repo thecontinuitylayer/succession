@@ -13,6 +13,7 @@
 #
 # Usage:
 #   log-append.sh charter
+#   log-append.sh accept <charter sha256>
 #   log-append.sh name <Codename>
 #   log-append.sh name --auto                         (called by session-start.sh)
 #   log-append.sh seat <Codename>
@@ -61,9 +62,29 @@
 # same). verify.sh compares the handoff with it later.
 #
 # charter writes .succession/charter.md from the plugin's template when
-# the project has none. It never changes a charter that is there.
+# the project has none. It never changes a charter that is there. Either
+# way it says whether the charter is in force.
 #
-# Files written, all under <repo>/.succession: log.jsonl, lineage.jsonl,
+# A charter is in force in two cases and no other: it is the plugin's
+# template, word for word, or the owner accepted this exact text in this
+# clone. accept <sha256> records that. The sha256 is the one "charter"
+# printed for the text the owner was shown (the file with carriage
+# returns removed); accept refuses when the charter reads otherwise by
+# then. It writes one line to <git folder>/succession/charter-accepted:
+# the sha256 of that sha256 and the path of the project's root. That is
+# the one file this script writes outside .succession/, and it is there
+# for a reason: nothing under .succession/ can show where it came from.
+# A repository that was cloned or pulled can carry any file there, a
+# record of acceptance included. The git folder is not part of what a
+# clone or a pull brings, so a record in it was made on this machine,
+# and the path in it ties the record to this folder. (A copy of the
+# whole folder, git folder included, unpacked at the same path, does
+# carry the record. See SECURITY.md.) A charter that is changed
+# afterwards has another sha256 and is out of force until the owner
+# accepts the new text. No skill pre-approves accept: under Claude
+# Code's default permissions the owner is asked before it runs.
+#
+# Files written under <repo>/.succession: log.jsonl, lineage.jsonl,
 # seat.json, charter.md (charter), tenures/<tenure>/checkpoints.md (seat)
 # and tenures/<tenure>/stood-down (stand_down). Short-lived ones:
 # seat.json.tmp, charter.md.tmp, the folder .lock with the file pid in
@@ -82,9 +103,11 @@
 # wrong state for this event, 6 the previous handoff has not been
 # verified yet.
 #
-# POSIX sh. No network. Writes nothing outside <repo>/.succession. Reads
-# nothing outside it either, apart from asking git where the repository
-# is and, at a close, how .succession/ stands in git.
+# POSIX sh. No network. Writes nothing outside <repo>/.succession, apart
+# from the one line "accept" keeps in the git folder (above). Reads
+# nothing outside it either, apart from that line, the plugin's own
+# charter template, asking git where the repository and its git folder
+# are and, at a close, how .succession/ stands in git.
 
 LC_ALL=C
 export LC_ALL
@@ -101,6 +124,7 @@ die() {
 usage() {
   cat >&2 <<'EOF'
 usage: log-append.sh charter
+       log-append.sh accept <charter sha256>
        log-append.sh name <Codename>
        log-append.sh name --auto
        log-append.sh seat <Codename>
@@ -817,6 +841,11 @@ cmd_seat() {
   printf 'Owner stop phrase: Stand down, %s\n' "$code"
   if [ ! -s "$S/charter.md" ]; then
     printf 'Note: .succession/charter.md is missing. Write it with the owner before working.\n'
+  else
+    charter_status
+    if [ "$CH_STATUS" = unaccepted ]; then
+      printf 'Note: .succession/charter.md is NOT in force. It is not the plugin'"'"'s template and the owner has not accepted this text in this clone, so it authorizes nothing. Show the owner the whole file and wait for their word.\n'
+    fi
   fi
   if [ -n "$DIFFERS" ]; then
     printf 'WARNING: before this seating, seat.json and the log disagreed: %s. One of the two was probably put back to an older version (git stash, git checkout and git reset --hard do that to tracked files) or edited by hand. A seating, a stand-down or a close may be missing from the record. Tell the owner now; "git stash list" and "git reflog" are where to look for the newer files.\n' "$DIFFERS"
@@ -925,11 +954,116 @@ cmd_name() {
   printf 'Handoffs are off. To turn them on and keep the name %s, send /succession:seat.\n' "$code"
 }
 
+# file_sum <path>: the sha256 of a file with carriage returns removed, so
+# that a CRLF checkout hashes the same.
+file_sum() {
+  tr -d '\r' < "$1" | sha256_stdin
+}
+
+# same_text <file> <file>: true when the two hold the same lines. A
+# carriage return at the end of a line is not counted. Shell builtins
+# only, as in session-start.sh, so that the two scripts give one answer.
+same_text() {
+  [ -r "$1" ] && [ -r "$2" ] || return 1
+  st_same=0
+  {
+    while :; do
+      st_a_end=0
+      st_b_end=0
+      IFS= read -r st_a <&3 || st_a_end=1
+      IFS= read -r st_b <&4 || st_b_end=1
+      if [ "${st_a%"$CR"}" != "${st_b%"$CR"}" ] || [ "$st_a_end" -ne "$st_b_end" ]; then
+        st_same=1
+        break
+      fi
+      [ "$st_a_end" -eq 0 ] || break
+    done
+  } 3< "$1" 4< "$2" 2> /dev/null || return 1
+  return "$st_same"
+}
+
+# git_store: the git folder of this work tree, in G, as git names it.
+# Returns 1 when there is none that a clone could not have brought: the
+# project's root must hold a .git entry of its own, which git never
+# stores in a repository. (A folder of tracked files that is laid out
+# like a bare repository has none, and git would name that folder as
+# both the root and the git folder.)
+git_store() {
+  G=
+  [ -e "$root/.git" ] || return 1
+  G=$(git -C "$root" rev-parse --git-dir 2> /dev/null)
+  [ -n "$G" ] || return 1
+  case $G in
+    /* | [A-Za-z]:*) ;;
+    *) G="$root/$G" ;;
+  esac
+  [ -d "$G" ]
+}
+
+# accept_mark <charter sha256>: what the git folder holds for an accepted
+# charter, in MARK: the sha256 of the charter's sha256 and the path of
+# the project's root, so that the record counts in this folder alone.
+accept_mark() {
+  MARK=$(printf '%s %s\n' "$1" "$root" | sha256_stdin) || MARK=
+  [ "${#MARK}" -eq 64 ] || MARK=
+}
+
+# charter_status: where the charter stands, in CH_STATUS, and its sha256
+# in CH_SUM (empty when it could not be taken).
+#   missing     no charter.md (or a link, which is never read)
+#   template    the plugin's template, word for word
+#   accepted    the owner accepted this exact text in this clone
+#   unaccepted  anything else: the charter authorizes nothing
+charter_status() {
+  CH_STATUS=missing
+  CH_SUM=
+  [ ! -L "$S/charter.md" ] || return 0
+  [ -f "$S/charter.md" ] || return 0
+  CH_STATUS=unaccepted
+  CH_SUM=$(file_sum "$S/charter.md") || CH_SUM=
+  [ "${#CH_SUM}" -eq 64 ] || CH_SUM=
+  cs_template="$here/../skills/_shared/charter-template.md"
+  if [ -f "$cs_template" ] && same_text "$S/charter.md" "$cs_template"; then
+    CH_STATUS=template
+    return 0
+  fi
+  [ -n "$CH_SUM" ] || return 0
+  git_store || return 0
+  [ ! -L "$G/succession" ] || return 0
+  [ -f "$G/succession/charter-accepted" ] || return 0
+  [ ! -L "$G/succession/charter-accepted" ] || return 0
+  accept_mark "$CH_SUM"
+  [ -n "$MARK" ] || return 0
+  cs_rec=
+  read -r cs_rec < "$G/succession/charter-accepted"
+  cs_rec=${cs_rec%"$CR"}
+  [ "$cs_rec" != "$MARK" ] || CH_STATUS=accepted
+  return 0
+}
+
+print_charter_status() {
+  charter_status
+  case $CH_STATUS in
+    template) printf 'It is the plugin'"'"'s template, word for word: in force.\n' ;;
+    accepted) printf 'The owner accepted this exact text in this clone: in force.\n' ;;
+    unaccepted)
+      printf 'NOT IN FORCE: this text is not the plugin'"'"'s template, and the owner has not accepted it in this clone. It authorizes nothing.\n'
+      if [ -n "$CH_SUM" ]; then
+        printf 'Charter sha256: %s\n' "$CH_SUM"
+        printf 'Show the owner the whole file and wait. When the owner accepts that text, in the conversation, run: log-append.sh accept %s\n' "$CH_SUM"
+      else
+        printf 'Show the owner the whole file and wait. It cannot be accepted on this machine: no sha256 tool was found (need sha256sum or shasum).\n'
+      fi
+      ;;
+  esac
+}
+
 cmd_charter() {
   [ $# -eq 0 ] || usage
   refuse_symlink "$S/charter.md"
   if [ -e "$S/charter.md" ]; then
     printf 'The charter is already there and was left as it is: .succession/charter.md\n'
+    print_charter_status
     return 0
   fi
   ch_template="$here/../skills/_shared/charter-template.md"
@@ -938,6 +1072,40 @@ cmd_charter() {
   cat "$ch_template" > "$S/charter.md.tmp" || die "cannot write the charter" 4
   mv -f "$S/charter.md.tmp" "$S/charter.md" || die "cannot write the charter" 4
   printf 'Charter written from the template: .succession/charter.md\n'
+  print_charter_status
+}
+
+# The owner's word for the charter. See the top of this file. The sha256
+# is the one "charter" printed for the text the owner was shown: a
+# charter that changed since then has another, and is not accepted.
+cmd_accept() {
+  [ $# -eq 1 ] || usage
+  case $1 in
+    *[!0-9a-f]*) die "not a sha256: $1. Give the one that 'log-append.sh charter' printed." 2 ;;
+  esac
+  [ "${#1}" -eq 64 ] || die "not a sha256: $1. Give the one that 'log-append.sh charter' printed." 2
+  refuse_symlink "$S/charter.md"
+  [ -f "$S/charter.md" ] || die "there is no charter to accept: .succession/charter.md is missing" 5
+  charter_status
+  if [ "$CH_STATUS" = template ]; then
+    printf 'The charter is the plugin'"'"'s template, word for word. It is in force and needs no acceptance.\n'
+    return 0
+  fi
+  [ -n "$CH_SUM" ] || die "no sha256 tool found (need sha256sum or shasum)" 4
+  if [ "$1" != "$CH_SUM" ]; then
+    die "the charter is not the text with that sha256: it reads $CH_SUM now. It was changed since it was shown, or the sha256 was mistyped. Nothing was recorded. Run 'log-append.sh charter', show the owner the file as it is now, and wait for their word." 5
+  fi
+  git_store || die "cannot find this project's git folder, where the acceptance is kept" 4
+  accept_mark "$CH_SUM"
+  [ -n "$MARK" ] || die "no sha256 tool found (need sha256sum or shasum)" 4
+  refuse_symlink "$G/succession"
+  mkdir -p "$G/succession" || die "cannot create $G/succession" 4
+  refuse_symlink "$G/succession/charter-accepted"
+  fresh_file "$G/succession/charter-accepted.tmp"
+  printf '%s\n' "$MARK" > "$G/succession/charter-accepted.tmp" || die "cannot record the acceptance" 4
+  mv -f "$G/succession/charter-accepted.tmp" "$G/succession/charter-accepted" || die "cannot record the acceptance" 4
+  printf 'Accepted: .succession/charter.md, sha256 %s.\n' "$CH_SUM"
+  printf 'Recorded in this project'"'"'s git folder, which a clone or a pull does not bring, for this folder alone. A change to the charter puts it out of force until the owner accepts the new text.\n'
 }
 
 # The last line of a close: where .succession/ stands in git, and the
@@ -1102,7 +1270,7 @@ here=${0%/*}
 [ "$here" != "$0" ] || here=.
 
 case $event in
-  charter | name | seat | checkpoint | close | vacate | stand_down | compact | verify) ;;
+  charter | accept | name | seat | checkpoint | close | vacate | stand_down | compact | verify) ;;
   *) usage ;;
 esac
 
@@ -1124,6 +1292,7 @@ refuse_symlink "$S/lineage.jsonl"
 lock "$@"
 case $event in
   charter) cmd_charter "$@" ;;
+  accept) cmd_accept "$@" ;;
   name) cmd_name "$@" ;;
   seat) cmd_seat "$@" ;;
   checkpoint) cmd_checkpoint "$@" ;;
