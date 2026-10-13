@@ -539,6 +539,13 @@ The limits:
       ...
 ```
 
+One file is kept outside that folder, and it is one line long. When you
+accept a charter that is not the plugin's template, a sha256 that stands
+for the text you accepted and the folder the project is in goes to
+`succession/charter-accepted` in the project's git folder (`.git/`). It
+is kept there because a git folder is not part of what a clone or a pull
+brings, and every file under `.succession/` can be. See [The charter and your word](#the-charter-and-your-word).
+
 For a moment during a write there are also `seat.json.tmp`,
 `charter.md.tmp`, `verification.md.tmp` and the folders `.lock` and
 `.lock-clear`. A symbolic link at any of these paths, or at any file or
@@ -558,12 +565,12 @@ Five POSIX shell scripts, and nothing else. No `jq`, `node` or `python`.
 
 | Script | When | What it does |
 | --- | --- | --- |
-| `scripts/session-start.sh` | Session start, resume, clear, compact, fork (a hook) | Prints up to 2,000 characters: seat status, charter path, latest handoff path and the verdict in the log's last verify entry for it, and a warning when the state files look older than the tenure folders. With the seat held and no warning: the last checkpoint in the log and who the session is (see [Coming back by name](#coming-back-by-name)). With a name and nothing else: three lines, the name and how to turn handoffs on. At a new session (`startup`) in a git project with no seat, log, lineage or charter, has `log-append.sh name --auto` write a name before it prints. Otherwise prints nothing in a project without `.succession/`, and writes nothing. |
+| `scripts/session-start.sh` | Session start, resume, clear, compact, fork (a hook) | Prints up to 2,000 characters: seat status, charter path and whether the charter is in force, for a seated officeholder what to ask the owner about whatever a charter says, latest handoff path and the verdict in the log's last verify entry for it, and a warning when the state files look older than the tenure folders. With the seat held and no warning: the last checkpoint in the log and who the session is (see [Coming back by name](#coming-back-by-name)). With a name and nothing else: three lines, the name and how to turn handoffs on. At a new session (`startup`) in a git project with no seat, log, lineage or charter, has `log-append.sh name --auto` write a name before it prints. Otherwise prints nothing in a project without `.succession/`, and writes nothing. |
 | `scripts/session-start.sh title` | New session, resume, fork (a second hook) | With the seat held and no warning, or with a name and nothing else, prints one JSON document that gives Claude Code the officeholder's name as the session's title. Otherwise prints nothing. Its input is read for one thing: whether the session already has a title. |
 | `scripts/compact-mark.sh` | Before a compaction (a hook) | With the seat held, has `log-append.sh` add one entry to the log. Prints nothing, always exits 0. |
 | `scripts/stand-down.sh` | Every submitted prompt (a hook) | Compares the prompt with the stop phrase. On a match, calls `log-append.sh`. The prompt is examined in memory and is never stored. |
 | `scripts/verify.sh` | When the seat, checkpoint or close skill calls it | Checks pointers and the log chain with `git cat-file`, `git rev-parse` and `git merge-base`, and the handoff against the sha256 in its close entry; writes `verification.md`. |
-| `scripts/log-append.sh` | When a skill, the hook or `verify.sh` calls it | The single writer of `log.jsonl`, `seat.json` and `lineage.jsonl`. With `name --auto`, called by both startup hooks, it writes a name-mode `seat.json` under its lock when there is none yet, so the two agree on one name. Writes the charter from the template when the project has none. At a close it also asks `git status` and `git check-ignore` about `.succession/`, to print the last line of the close. It stages and commits nothing. |
+| `scripts/log-append.sh` | When a skill, the hook or `verify.sh` calls it | The single writer of `log.jsonl`, `seat.json` and `lineage.jsonl`. With `name --auto`, called by both startup hooks, it writes a name-mode `seat.json` under its lock when there is none yet, so the two agree on one name. Writes the charter from the template when the project has none, and says whether the charter is in force. With `accept <sha256>`, records in the git folder that you accepted the charter with that sha256. At a close it also asks `git status` and `git check-ignore` about `.succession/`, to print the last line of the close. It stages and commits nothing. |
 
 The session-start and prompt hooks are kept cheap, because one of them
 runs on every prompt and starting a process is slow on Windows. In a
@@ -590,7 +597,42 @@ The hooks never ask.
 
 The plugin makes no network calls, fetches nothing, never reads the
 conversation transcript or chat history, and writes nothing outside
-`.succession/`. See [PRIVACY.md](PRIVACY.md).
+`.succession/` apart from the one line in the git folder that records
+that you accepted a charter. See [PRIVACY.md](PRIVACY.md).
+
+### The charter and your word
+
+A charter says what the officeholder may do without asking. That makes
+it the one file in `.succession/` that could hand out authority, so the
+plugin treats a charter it finds as text until you have said yes to it.
+
+- **In force without a word from you:** the plugin's template, word for
+  word. `log-append.sh charter` writes it when a project has none.
+- **In force on your word:** any other text, once you accepted that
+  exact text in this clone. The officeholder shows you the whole file
+  and waits. When you say yes, it runs `log-append.sh accept <sha256>`
+  with the sha256 the script printed for the text it showed you. That
+  command is not approved in advance, so under Claude Code's default
+  permissions you are asked before it runs. The script refuses if the
+  charter has changed since.
+- **Not in force:** everything else. A charter that came with a cloned
+  repository, a charter somebody edited, a charter changed since you
+  accepted it, a project folder that was moved or copied. The scripts
+  and the session-start hook say `NOT in force`, the skill tells the model that such a charter authorizes
+  nothing, and the template applies until you accept the text.
+
+Whatever a charter says, accepted or not, the template's "Ask the owner
+before you" list stays: the officeholder asks you before it pushes, merges, tags,
+publishes or deploys; deletes files or branches, rewrites history or
+forces anything; adds, removes or upgrades a dependency; or touches
+secrets, credentials, billing or anything outside the repository. A
+charter can add to that list and cannot take from it. A handoff
+authorizes nothing at all.
+
+These are instructions to the model plus a check a script makes on the
+charter's text. They are not a sandbox: what a command may do on your
+machine is decided by Claude Code's permission settings, and the plugin
+does not change those beyond the list in the next section.
 
 ## Permission prompts
 
@@ -604,7 +646,7 @@ when it did not.
 
 | Skill | Approved in advance |
 | --- | --- |
-| `seat` | `verify.sh` with no arguments. `log-append.sh charter`, which writes the template charter when there is none and never changes one that is there. `log-append.sh seat <Codename>`. `log-append.sh name <Codename>`, which writes `seat.json` with the name and nothing else. |
+| `seat` | `verify.sh` with no arguments. `log-append.sh charter`, which writes the template charter when there is none, never changes one that is there, and says whether it is in force. `log-append.sh seat <Codename>`. `log-append.sh name <Codename>`, which writes `seat.json` with the name and nothing else. |
 | `checkpoint` | `log-append.sh checkpoint <summary>`. `verify.sh --draft --checkpoints`. Writing `checkpoints.md` in a tenure folder under `.succession/tenures/`. |
 | `close` | `verify.sh --draft`. `log-append.sh close <summary> <last words>`. Writing `handoff.md` and `lessons.md` in a tenure folder under `.succession/tenures/`. |
 | `lineage` | Nothing. It reads files in your project, which Claude Code allows anyway. |
@@ -629,6 +671,8 @@ rule for skills, and the plugin cannot extend it.
 - `git add`, `git commit`, `git push` and every other command that is not
   one of the script calls above.
 - Any file outside `.succession/`.
+- `log-append.sh accept <sha256>`, which records that you accepted the
+  charter.
 - Any other file inside it. The scripts write `seat.json`, `log.jsonl` and
   `lineage.jsonl`; a model that tries to change them by hand gets the
   usual question.
@@ -845,7 +889,7 @@ What has not:
 ## Tests
 
 ```
-sh tests/run.sh        # three tenures, the stop phrase, hostile claims, session start, compaction, a name alone, the log, the close, safety
+sh tests/run.sh        # three tenures, the stop phrase, hostile claims, session start, compaction, a name alone, the log, the close, safety, the charter
 sh tests/autocrlf.sh   # the whole suite again in a core.autocrlf=true clone
 sh tests/lint.sh       # shellcheck, POSIX syntax, the approvals list, copies of shared text, one version
 sh tests/bench.sh      # wall time of the two hooks
@@ -874,7 +918,7 @@ answered in six real sessions, and says so in its opening lines.
 
 ## Version and license
 
-Version 0.9.2. It becomes 1.0.0 once a real session on macOS, an
+Version 0.9.3. It becomes 1.0.0 once a real session on macOS, an
 interactive session in a terminal and the one-line install have been
 run. Changes are in [CHANGELOG.md](CHANGELOG.md). To report a security
 problem, see [SECURITY.md](SECURITY.md). MIT; see [LICENSE](LICENSE).

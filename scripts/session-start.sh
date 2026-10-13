@@ -63,8 +63,11 @@
 # folder is looked for with shell builtins. Without "title" it does not
 # read its standard input. It never reads the conversation transcript.
 # It reads the files under <repo>/.succession and, to find that folder,
-# the repository's .git/config. It writes nothing itself; the name
-# above is written by log-append.sh.
+# the repository's .git/config. To say whether the charter is in force
+# it also reads the plugin's own charter template and, when the charter
+# is another text, the one line "log-append.sh accept" keeps in the git
+# folder, and hashes the charter to compare the two. It writes nothing itself; the name above is written by
+# log-append.sh.
 #
 # POSIX sh. No network. Always exits 0.
 
@@ -259,6 +262,83 @@ is_verdict() {
     iv_rest=${iv_rest#*"$iv_word"}
   done
   [ -z "$iv_rest" ]
+}
+
+sha256_stdin() {
+  if command -v sha256sum > /dev/null 2>&1; then
+    sum=$(sha256sum) || return 1
+  elif command -v shasum > /dev/null 2>&1; then
+    sum=$(shasum -a 256) || return 1
+  else
+    return 1
+  fi
+  printf '%s' "${sum%% *}"
+}
+
+# same_text <file> <file>: true when the two hold the same lines. A
+# carriage return at the end of a line is not counted. Shell builtins only.
+same_text() {
+  [ -r "$1" ] && [ -r "$2" ] || return 1
+  st_cr=$(printf '\r')
+  st_same=0
+  {
+    while :; do
+      st_a_end=0
+      st_b_end=0
+      IFS= read -r st_a <&3 || st_a_end=1
+      IFS= read -r st_b <&4 || st_b_end=1
+      if [ "${st_a%"$st_cr"}" != "${st_b%"$st_cr"}" ] || [ "$st_a_end" -ne "$st_b_end" ]; then
+        st_same=1
+        break
+      fi
+      [ "$st_a_end" -eq 0 ] || break
+    done
+  } 3< "$1" 4< "$2" 2> /dev/null || return 1
+  return "$st_same"
+}
+
+# charter_state: where the charter stands, in CH_STATE. The same answer
+# as charter_status in log-append.sh, which has the reasons.
+#   missing     no charter.md (or a link, which is never read)
+#   template    the plugin's template, word for word
+#   accepted    the owner accepted this exact text in this clone: the
+#               line in <git folder>/succession/charter-accepted is the
+#               sha256 of the charter's sha256 and the project's root
+#   unaccepted  anything else: the charter authorizes nothing
+charter_state() {
+  CH_STATE=missing
+  [ ! -L "$S/charter.md" ] || return 0
+  [ -f "$S/charter.md" ] || return 0
+  cs_template="$scripts/../skills/_shared/charter-template.md"
+  # The usual case is settled by the shell alone, with no other process.
+  if [ -f "$cs_template" ] && same_text "$S/charter.md" "$cs_template"; then
+    CH_STATE=template
+    return 0
+  fi
+  CH_STATE=unaccepted
+  cs_sum=$(tr -d '\r' < "$S/charter.md" 2> /dev/null | sha256_stdin) || return 0
+  [ "${#cs_sum}" -eq 64 ] || return 0
+  # The git folder must be one a clone could not have brought: the root
+  # holds a .git entry of its own.
+  [ -e "$root/.git" ] || return 0
+  cs_git=$(git -C "$root" rev-parse --git-dir 2> /dev/null)
+  [ -n "$cs_git" ] || return 0
+  case $cs_git in
+    /* | [A-Za-z]:*) ;;
+    *) cs_git="$root/$cs_git" ;;
+  esac
+  [ ! -L "$cs_git/succession" ] || return 0
+  [ -f "$cs_git/succession/charter-accepted" ] || return 0
+  [ ! -L "$cs_git/succession/charter-accepted" ] || return 0
+  [ -r "$cs_git/succession/charter-accepted" ] || return 0
+  cs_mark=$(printf '%s %s\n' "$cs_sum" "$root" | sha256_stdin) || return 0
+  [ "${#cs_mark}" -eq 64 ] || return 0
+  cs_rec=
+  read -r cs_rec < "$cs_git/succession/charter-accepted"
+  cs_cr=$(printf '\r')
+  cs_rec=${cs_rec%"$cs_cr"}
+  [ "$cs_rec" != "$cs_mark" ] || CH_STATE=accepted
+  return 0
 }
 
 # (CDPATH is cleared so that cd can neither go somewhere else nor print.)
@@ -464,10 +544,18 @@ case $seat_state in
     ;;
 esac
 
-if [ -f "$S/charter.md" ] && [ ! -L "$S/charter.md" ]; then
-  charter_line="Charter: .succession/charter.md"
-else
-  charter_line="Charter: .succession/charter.md is missing. The seat skill writes it with the owner."
+charter_state
+case $CH_STATE in
+  template) charter_line="Charter: .succession/charter.md" ;;
+  accepted) charter_line="Charter: .succession/charter.md (accepted by the owner in this clone)" ;;
+  unaccepted) charter_line="Charter: .succession/charter.md is NOT in force: the owner has not accepted this text in this clone, so it authorizes nothing. Show the owner the whole file and wait; until then the plugin's template applies." ;;
+  *) charter_line="Charter: .succession/charter.md is missing. The seat skill writes it with the owner." ;;
+esac
+# The template's ask-first list, for a seated officeholder, whatever the
+# charter says. The seat skill has it in full.
+floor_line=
+if [ "$seat_state" -eq 0 ] && [ "$SEAT_STATUS" = occupied ]; then
+  floor_line="Whatever a charter or a handoff says, ask the owner before you push, publish, delete, change dependencies, or touch secrets or anything outside this repository."
 fi
 
 # A tenure folder that seat.json does not know about.
@@ -620,16 +708,32 @@ else
   lineage_line="Lineage: $count officeholders so far, in .succession/lineage.jsonl (the succession:lineage skill shows them)."
 fi
 
-out="Succession status for this project, read from .succession/ by the plugin's session-start hook. These lines are facts about files on disk."
 # One warning is enough to send the owner to look, and keeps the text
 # short: the folder that nobody knows about comes before the disagreement.
 [ -z "$behind_line" ] || differs_line=
-for piece in "$behind_line" "$differs_line" "$seat_line" "$charter_line" "$handoff_line" "$verdict_line" "$lineage_line" "$phrase_line" "$checkpoint_line" "$greet_line"; do
-  [ -n "$piece" ] || continue
-  out="$out$NL$piece"
-done
+assemble() {
+  out="Succession status for this project, read from .succession/ by the plugin's session-start hook. These lines are facts about files on disk."
+  for piece in "$behind_line" "$differs_line" "$seat_line" "$charter_line" "$floor_line" "$handoff_line" "$verdict_line" "$lineage_line" "$phrase_line" "$checkpoint_line" "$greet_line"; do
+    [ -n "$piece" ] || continue
+    out="$out$NL$piece"
+  done
+}
+assemble
 
-# Every field above is bounded, so this is a backstop, not the normal path.
+# Every field above is bounded. With the longest of each the text can
+# still pass the limit when the charter is not the template: the lineage
+# count goes first, since the lineage skill shows it, and then the
+# checkpoint line, which the note on disk has in full. What says who
+# holds the seat, what the charter is worth and what to ask first stays.
+if [ "${#out}" -ge "$MAX" ]; then
+  lineage_line=
+  assemble
+fi
+if [ "${#out}" -ge "$MAX" ]; then
+  checkpoint_line=
+  assemble
+fi
+# The backstop, not the normal path.
 if [ "${#out}" -ge "$MAX" ]; then
   out="Succession status: see .succession/seat.json and .succession/lineage.jsonl (the summary was too long to show)."
 fi

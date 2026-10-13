@@ -18,7 +18,11 @@ what it writes and what it leaves alone.
   `git rev-parse` and `git merge-base`, to check the commit and file
   pointers in a handoff. It does not read your working tree to do this.
 - **Its own charter template**, in the plugin folder, when a project has
-  no charter yet.
+  no charter yet and to tell whether a project's charter is that
+  template.
+- **One line in your project's git folder**, at
+  `succession/charter-accepted`, if you accepted a charter: a sha256
+  made from the charter's sha256 and the path of the project folder.
 - **How `.succession/` stands in git, at a close.** `git status` and
   `git check-ignore` are asked about that one folder, so that the close
   can end by telling you whether its files are committed. Nothing is
@@ -72,7 +76,13 @@ Short-lived files, each gone when the write that made it ends:
 `tenures/<NNN-codename>/verification.md.tmp`, and the folders `.lock`
 (holding one file, `pid`) and `.lock-clear`.
 
-Nothing is written outside `.succession/`. A symbolic link at any path
+One thing is written outside `.succession/`: when you accept a charter
+that is not the plugin's template, `log-append.sh accept` writes one
+line, a sha256 made from the charter's sha256 and the path of the
+project folder, to `succession/charter-accepted` in your project's git
+folder. It holds no text of yours and no readable path, it is not pushed
+or cloned, and you can delete it; the charter is then out of force until
+you accept it again. Nothing else is written outside `.succession/`. A symbolic link at any path
 the scripts read or write there is never followed: a link in the way of
 a short-lived file is removed (the link itself, not what it points at),
 and any other link, a linked `.succession/` or tenure folder included,
