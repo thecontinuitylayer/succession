@@ -81,7 +81,7 @@ MARK_AUTO='Context compacted (auto). Written by the plugin before Claude Code co
 mode=${1-}
 auto=0
 case $mode in
-  startup) mode= auto=1 ;;
+  startup) mode='' auto=1 ;;
   title) [ "${2-}" != startup ] || auto=1 ;;
   compact) ;;
   *) mode= ;;
