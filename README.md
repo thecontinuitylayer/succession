@@ -34,8 +34,6 @@ You do not have to take all of it at once.
    `Sextant` becomes `Sextant-001`, with checkpoints, a close and a
    handoff whose pointers the next session's script checks. Everything below describes
    this.
-3. **Help setting it up.** Succession Install is a paid setup service:
-   https://thecontinuitylayer.com/succession-install
 
 ## Install
 
@@ -89,7 +87,8 @@ same command worked. What to do:
 
 ## Start
 
-Open a git project in Claude Code and type:
+A new session in a git project already opens with a name (see
+[Start small](#start-small)). To turn on handoffs, type:
 
 ```
 /succession:seat
