@@ -390,6 +390,11 @@ if [ "$seat_state" -eq 3 ]; then
   printf 'Succession, by name alone, read from .succession/seat.json by the plugin'"'"'s session-start hook.\n'
   printf 'You are %s in this project. Open your %s reply with one short line that says your name, then give the owner the next line once, as it is.\n' "$SEAT_CODENAME" "$which_reply"
   printf 'Handoffs are off. To turn them on and keep the name %s, send /succession:seat.\n' "$SEAT_CODENAME"
+  # Once, on the very first naming in a project: where the other people
+  # doing this are. One line, no pitch, never repeated after this run.
+  if [ "${auto_name:-0}" -eq 1 ]; then
+    printf 'First name in this project. Say it, and which AI you use, in the free group: https://www.skool.com/the-continuity-layer-8309\n'
+  fi
   exit 0
 fi
 
