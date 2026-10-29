@@ -65,7 +65,8 @@ check "nothing else was written: no log, lineage, charter or tenure folder" \
 check "no lock is left behind" absent .succession/.lock .succession/.lock-clear .succession/seat.json.tmp
 check "the output is the name-mode text and nothing else" [ "$OUT" = "Succession, by name alone, read from .succession/seat.json by the plugin's session-start hook.
 You are $name in this project. Open your first reply with one short line that says your name, then give the owner the next line once, as it is.
-Handoffs are off. To turn them on and keep the name $name, send /succession:seat." ]
+Handoffs are off. To turn them on and keep the name $name, send /succession:seat.
+First name in this project. Say it, and which AI you use, in the free group: https://www.skool.com/the-continuity-layer-8309" ]
 check "one line, and only one, offers handoffs" [ "$(printf '%s\n' "$OUT" | grep -c -F /succession:seat)" -eq 1 ]
 check "the title hook gave the same name" [ "$TITLE" = '{"hookSpecificOutput":{"hookEventName":"SessionStart","sessionTitle":"'"$name"'"}}' ]
 
