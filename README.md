@@ -1,5 +1,7 @@
 # Succession
 
+Succession gives each Claude Code chat a name and carries a handoff — and your memory file — to the next one. Free, from [The Continuity Layer](https://thecontinuitylayer.com).
+
 Your AI gets a name, a job, and a successor.
 
 Succession is a Claude Code plugin for agent work that spans sessions in a
@@ -557,6 +559,33 @@ change it.
 
 Whether these files belong in your git history is answered under
 [Should `.succession/` be in git?](#should-succession-be-in-git).
+
+## Your memory file
+
+[What your AI remembers about you](https://thecontinuitylayer.com/what-your-ai-remembers)
+is a free page on the same site. You paste one prompt into ChatGPT,
+Claude, Gemini, Grok or Copilot, paste back what it says it remembers
+about you, and the page shows it as a map, counts it, points out where
+two AIs disagree, and gives you a **memory file** to download:
+`my-memory-file.md`, one plain Markdown page sorted by topic, with each
+memory marked by the AI it came from. Nothing you paste leaves your
+browser; there is no account and no server.
+
+The file is yours to keep or to hand to any AI. To carry it with
+Succession, place it in your project as described on that page, so that
+it sits beside the record the plugin keeps. Commit it with the rest of
+`.succession/` if you want it to travel with the repository; it is plain
+text and git treats it like any other file. Read it before you share a
+repository, for the same reason the plugin's own files deserve a read:
+it says a lot about you.
+
+## Links
+
+- Site: <https://thecontinuitylayer.com> · the plugin's page:
+  <https://thecontinuitylayer.com/succession>
+- Your memory file: <https://thecontinuitylayer.com/what-your-ai-remembers>
+- Community (Skool): <https://www.skool.com/the-continuity-layer-8309>
+- YouTube: <https://www.youtube.com/@agentazb>
 
 ## What runs on your machine
 
